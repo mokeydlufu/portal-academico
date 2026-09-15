@@ -15,16 +15,19 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $correo = trim($_POST['correo'] ?? '');
     $password = trim($_POST['password'] ?? '');
-    $loginApi = (strpos(API_URL, 'http') === 0) ? API_URL : (defined('INTERNAL_API_URL') ? INTERNAL_API_URL : 'http://127.0.0.1:8000/api');
+    $payload = json_encode(['correo' => $correo, 'password' => $password]);
+    $loginApi = defined('INTERNAL_API_URL') ? INTERNAL_API_URL : 'http://127.0.0.1:8000/api';
     $ch = curl_init($loginApi . '/auth/login');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => $payload,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json']
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_TIMEOUT => 15
     ]);
     $out = curl_exec($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErr = curl_error($ch);
     curl_close($ch);
 
     if ($code === 200) {
@@ -39,7 +42,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         exit;
     } else {
-        $error = 'Correo o contraseña incorrectos';
+        $d = json_decode($out, true);
+        if ($curlErr) {
+            $error = 'Error de comunicación interna: ' . $curlErr;
+        } elseif (!empty($d['detail'])) {
+            $error = is_string($d['detail']) ? $d['detail'] : 'Credenciales incorrectas';
+        } else {
+            $error = 'Correo o contraseña incorrectos';
+        }
     }
 }
 ?>
