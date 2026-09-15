@@ -15,8 +15,8 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $correo = trim($_POST['correo'] ?? '');
     $password = trim($_POST['password'] ?? '');
-    $payload = json_encode(['correo' => $correo, 'password' => $password]);
-    $ch = curl_init(API_URL . '/auth/login');
+    $loginApi = (strpos(API_URL, 'http') === 0) ? API_URL : (defined('INTERNAL_API_URL') ? INTERNAL_API_URL : 'http://127.0.0.1:8000/api');
+    $ch = curl_init($loginApi . '/auth/login');
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,

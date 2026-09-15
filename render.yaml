@@ -1,10 +1,10 @@
 services:
-  # ── SERVICIO BACKEND (FastAPI + Python + Docker) ──
+  # ── PORTAL ACADÉMICO UNIFICADO (UN SOLO SERVICIO Y UN SOLO LINK) ──
   - type: web
-    name: portal-academico-backend
+    name: portal-academico
     runtime: docker
-    dockerContext: backend
-    dockerfilePath: backend/Dockerfile
+    dockerContext: .
+    dockerfilePath: Dockerfile
     plan: free
     region: oregon
     envVars:
@@ -20,18 +20,6 @@ services:
         value: storage/backups
       - key: BACKUP_TIMEZONE
         value: America/Lima
-
-  # ── SERVICIO FRONTEND (PHP + Apache + Docker) ──
-  - type: web
-    name: portal-academico-frontend
-    runtime: docker
-    dockerContext: frontend
-    dockerfilePath: frontend/Dockerfile
-    plan: free
-    region: oregon
-    envVars:
-      - key: API_URL
-        value: https://portal-academico-backend-l24m.onrender.com/api
 
 databases:
   # ── BASE DE DATOS POSTGRESQL ──
