@@ -31,7 +31,7 @@ services:
     region: oregon
     envVars:
       - key: API_URL
-        value: https://portal-academico-backend.onrender.com/api
+        value: https://portal-academico-backend-l24m.onrender.com/api
 
 databases:
   # ── BASE DE DATOS POSTGRESQL ──
