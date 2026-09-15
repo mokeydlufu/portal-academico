@@ -1,15 +1,22 @@
 FROM python:3.11-slim
 
-# Instalar dependencias del sistema: PHP, Nginx, PostgreSQL Client (para pg_dump/pg_restore) y utilidades
+# Instalar dependencias del sistema y el cliente oficial de PostgreSQL 16 (para pg_dump y pg_restore reales)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    gnupg \
+    lsb-release \
+    ca-certificates \
+    && (curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg && \
+        echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+        apt-get update && apt-get install -y --no-install-recommends postgresql-client-16) || \
+        (apt-get update && apt-get install -y --no-install-recommends postgresql-client-15) \
+    && apt-get install -y --no-install-recommends \
     php-cli \
     php-curl \
     php-pgsql \
     php-mbstring \
-    postgresql-client \
     nginx \
     gettext-base \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

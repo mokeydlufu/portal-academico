@@ -44,6 +44,13 @@ def get_pg_tool_path(tool_name: str) -> str | None:
     if custom_path and Path(custom_path).exists():
         return str(Path(custom_path).resolve())
 
+    # Búsqueda en rutas conocidas de Linux (Debian / Ubuntu / PGDG)
+    for pattern in ["/usr/lib/postgresql/*/bin", "/usr/local/bin"]:
+        for bin_dir in sorted(glob.glob(pattern), reverse=True):
+            candidate = Path(bin_dir) / tool_name
+            if candidate.exists() and os.access(candidate, os.X_OK):
+                return str(candidate.resolve())
+
     # Búsqueda en PATH
     in_path = shutil.which(tool_name) or shutil.which(f"{tool_name}.exe")
     if in_path:
