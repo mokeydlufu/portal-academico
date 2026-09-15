@@ -253,7 +253,7 @@ if (!in_array($_SESSION['rol'] ?? '', ['ADMIN', 'ADMINISTRADOR'])) {
               <i class="fa fa-folder-open text-[9px] text-purple-400"></i> Explorador de Backups
             </div>
             <div id="nav-backups-guardados" onclick="cargarModuloAdmin('backups-guardados')" class="px-2.5 py-1.5 rounded text-slate-400 hover:text-white cursor-pointer hover:bg-slate-800/40 transition-colors">
-              Archivos de Backup (.dump)
+              Copias guardadas
             </div>
             <div id="nav-backups-programacion" onclick="cargarModuloAdmin('backups-programacion')" class="px-2.5 py-1.5 rounded text-slate-400 hover:text-white cursor-pointer hover:bg-slate-800/40 transition-colors">
               Programación Automática
@@ -305,7 +305,7 @@ if (!in_array($_SESSION['rol'] ?? '', ['ADMIN', 'ADMINISTRADOR'])) {
           </div>
           <div class="flex justify-between">
             <span class="text-slate-500">Tipo de Copia:</span>
-            <span class="font-semibold text-purple-700">MANUAL</span>
+            <span class="font-semibold text-purple-700">Manual</span>
           </div>
           <div class="flex justify-between">
             <span class="text-slate-500">Directorio de Almacenamiento:</span>
@@ -339,7 +339,7 @@ if (!in_array($_SESSION['rol'] ?? '', ['ADMIN', 'ADMINISTRADOR'])) {
       </div>
       <div class="p-5 text-xs space-y-3">
         <div class="bg-slate-50 border border-slate-200 rounded p-3 space-y-2 text-[11px]">
-          <div><span class="text-slate-500 font-medium">Archivo:</span> <span id="detFilename" class="font-mono font-bold text-slate-800 block text-xs">...</span></div>
+          <div><span class="text-slate-500 font-medium">Copia de seguridad:</span> <span id="detFilename" class="font-bold text-slate-800 block text-xs">...</span></div>
           <div><span class="text-slate-500 font-medium">Ruta en Disco:</span> <span id="detPath" class="font-mono text-slate-600 block text-[10px] break-all">...</span></div>
           <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200">
             <div><span class="text-slate-500">Tamaño:</span> <span id="detSize" class="font-semibold text-slate-800 block">...</span></div>
@@ -381,12 +381,12 @@ if (!in_array($_SESSION['rol'] ?? '', ['ADMIN', 'ADMINISTRADOR'])) {
 
         <input type="hidden" id="restaurarBackupId">
         <div>
-          <label class="block font-semibold text-slate-700 mb-1">Archivo de Respaldo Seleccionado:</label>
+          <label class="block font-semibold text-slate-700 mb-1">Copia utilizada:</label>
           <input type="text" id="restaurarFilename" readonly class="w-full bg-slate-100 border border-slate-300 rounded px-3 py-1.5 font-mono text-[11px] text-slate-800">
         </div>
 
         <div>
-          <label class="block font-semibold text-slate-700 mb-1">Nombre de la Base de Datos Destino (Prueba):</label>
+          <label class="block font-semibold text-slate-700 mb-1">Base restaurada de prueba:</label>
           <input type="text" id="restaurarTargetDb" value="portal_academico_restaurado_prueba" class="w-full border border-slate-300 rounded px-3 py-1.5 font-mono text-xs focus:outline-none focus:border-amber-500">
           <span class="text-[10px] text-slate-500 mt-0.5 block">Solo letras minúsculas, números y guiones bajos (ej: portal_academico_restaurado_prueba).</span>
         </div>

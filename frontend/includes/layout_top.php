@@ -41,7 +41,7 @@
   <ul id="backupSubmenu" class="nav nav-pills nav-stacked" style="display:none; padding-left:14px; font-size:12px; background:rgba(0,0,0,0.12); border-radius:4px; margin-top:2px;">
     <li><a href="/backups.php?tab=panel"><i class="fa fa-chart-pie" style="font-size:11px;"></i> Panel de Backups</a></li>
     <li><a href="javascript:void(0)" onclick="triggerCrearBackupModal()"><i class="fa fa-plus-circle text-success" style="font-size:11px;"></i> Crear Backup</a></li>
-    <li><a href="/backups.php?tab=guardados"><i class="fa fa-box-archive" style="font-size:11px;"></i> Backups Guardados</a></li>
+    <li><a href="/backups.php?tab=guardados"><i class="fa fa-box-archive" style="font-size:11px;"></i> Copias guardadas</a></li>
     <li><a href="/backups.php?tab=programacion"><i class="fa fa-clock text-warning" style="font-size:11px;"></i> Programación</a></li>
     <li><a href="/backups.php?tab=historial"><i class="fa fa-list-check" style="font-size:11px;"></i> Historial</a></li>
     <li><a href="/backups.php?tab=restauraciones"><i class="fa fa-rotate-left text-info" style="font-size:11px;"></i> Restauraciones</a></li>

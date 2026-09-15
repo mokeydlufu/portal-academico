@@ -917,6 +917,59 @@ async function eliminarMatriculaConfirm(id) {
 // 5. VISTAS: COPIAS DE SEGURIDAD (PANEL, GUARDADOS, PROGRAMACIÓN, HISTORIAL, RESTAURACIONES)
 // =========================================================================
 
+/**
+ * Convierte un nombre técnico de archivo de backup como:
+ * portal_academico_20260915_175509.backup
+ * en un texto visible limpio y profesional:
+ * Backup 15/09/2026 - 17:55:09
+ */
+function formatNombreBackupVisible(filename) {
+  if (!filename) return '--';
+  const str = String(filename);
+  if (str.toLowerCase().includes('restore') || str.toLowerCase().includes('restaurad')) {
+    return formatNombreRestauracionVisible(filename);
+  }
+  const m = str.match(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+  if (m) {
+    const [_, yyyy, mm, dd, hh, min, ss] = m;
+    return `Backup ${dd}/${mm}/${yyyy} - ${hh}:${min}:${ss}`;
+  }
+  return str;
+}
+
+/**
+ * Convierte un nombre técnico de base restaurada como:
+ * portal_academico_restore_20260915_175509 o portal_academico_restaurado_20260915_175509
+ * en un texto visible profesional:
+ * Restauración 15/09/2026 - 17:55:09
+ */
+function formatNombreRestauracionVisible(nombre) {
+  if (!nombre) return '--';
+  const str = String(nombre);
+  const m = str.match(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
+  if (m) {
+    const [_, yyyy, mm, dd, hh, min, ss] = m;
+    return `Restauración ${dd}/${mm}/${yyyy} - ${hh}:${min}:${ss}`;
+  }
+  if (str === 'portal_academico_restaurado_prueba' || str.includes('restaurado_prueba') || str.includes('restore_prueba')) {
+    return 'Base restaurada de prueba';
+  }
+  return str;
+}
+
+/**
+ * Convierte el disparador o tipo a texto visible en español:
+ * MANUAL -> Manual
+ * PROGRAMADO / SCHEDULED / AUTOMATICO -> Automático
+ */
+function formatTipoBackupVisible(tipo) {
+  if (!tipo) return '--';
+  const t = String(tipo).trim().toUpperCase();
+  if (t === 'MANUAL') return 'Manual';
+  if (t === 'PROGRAMADO' || t === 'SCHEDULED' || t === 'AUTOMATICO') return 'Automático';
+  return tipo;
+}
+
 async function renderBackupsPanelView(container) {
   const [summary, backups] = await Promise.all([
     api('/backups/summary'),
@@ -924,6 +977,7 @@ async function renderBackupsPanelView(container) {
   ]);
 
   const h = summary.health;
+  const lastBackupVisible = formatNombreBackupVisible(summary.last_backup_file);
 
   container.innerHTML = `
     <!-- Encabezado -->
@@ -962,9 +1016,9 @@ async function renderBackupsPanelView(container) {
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-xs flex items-center justify-between">
         <div>
-          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Último Backup</span>
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Última copia de seguridad</span>
           <span class="text-base font-bold text-slate-800 mt-1 block">${summary.last_backup_date ? summary.last_backup_date.split(' ')[0] : 'Sin fecha'}</span>
-          <span class="text-[10px] text-slate-500 truncate block max-w-[150px]">${summary.last_backup_file || 'Sin respaldos'}</span>
+          <span class="text-[10px] text-slate-500 truncate block max-w-[150px]" title="${esc(lastBackupVisible)}">${esc(lastBackupVisible || 'Sin respaldos')}</span>
         </div>
         <div class="w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-base">
           <i class="fa fa-clock-rotate-left"></i>
@@ -973,7 +1027,7 @@ async function renderBackupsPanelView(container) {
 
       <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-xs flex items-center justify-between">
         <div>
-          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Próximo Backup</span>
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Próxima copia programada</span>
           <span class="text-base font-bold text-slate-800 mt-1 block">${summary.next_backup_date || 'No programado'}</span>
           <span class="text-[10px] text-slate-500 truncate block max-w-[150px]">${summary.next_backup_schedule || 'Sin política'}</span>
         </div>
@@ -984,7 +1038,7 @@ async function renderBackupsPanelView(container) {
 
       <div class="bg-white border border-slate-200 rounded-lg p-4 shadow-xs flex items-center justify-between">
         <div>
-          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Backups Guardados</span>
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Copias guardadas</span>
           <span class="text-2xl font-bold text-slate-800 mt-1 block">${summary.backup_count}</span>
           <span class="text-[10px] text-emerald-600 font-medium">Archivos íntegros</span>
         </div>
@@ -1016,7 +1070,7 @@ async function renderBackupsPanelView(container) {
           <thead class="bg-slate-50 text-slate-500 font-semibold uppercase text-[10px] border-b border-slate-200">
             <tr>
               <th class="py-2.5 px-3">Fecha</th>
-              <th class="py-2.5 px-3">Archivo</th>
+              <th class="py-2.5 px-3">Copia de Seguridad</th>
               <th class="py-2.5 px-3">Tipo</th>
               <th class="py-2.5 px-3">Tamaño</th>
               <th class="py-2.5 px-3 text-center">Estado</th>
@@ -1036,8 +1090,8 @@ function renderFilaBackupAdmin(b) {
   return `
     <tr class="hover:bg-slate-50 transition-colors">
       <td class="py-2.5 px-3 font-semibold text-slate-800">${esc(b.created_at)}</td>
-      <td class="py-2.5 px-3 font-mono font-bold text-slate-900">${esc(b.filename)}</td>
-      <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">${esc(b.backup_type)}</span></td>
+      <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(formatNombreBackupVisible(b.filename))}</td>
+      <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">${esc(formatTipoBackupVisible(b.backup_type))}</span></td>
       <td class="py-2.5 px-3 font-medium text-slate-700">${esc(b.size_formatted)}</td>
       <td class="py-2.5 px-3 text-center">
         <span class="px-2 py-0.5 rounded text-[10px] font-bold ${b.status === 'CORRECTO' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
@@ -1079,7 +1133,7 @@ async function renderBackupsGuardadosView(container) {
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 mb-4 border-b border-slate-200">
       <div>
         <h1 class="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-          <i class="fa fa-box-archive text-purple-600"></i> Backups Guardados en Disco
+          <i class="fa fa-box-archive text-purple-600"></i> Copias Guardadas en Disco
         </h1>
         <p class="text-xs text-slate-500">Archivos protegidos físicamente en el servidor</p>
       </div>
@@ -1096,7 +1150,7 @@ async function renderBackupsGuardadosView(container) {
           <thead class="bg-slate-50 text-slate-500 font-semibold uppercase text-[10px] border-b border-slate-200">
             <tr>
               <th class="py-2.5 px-3">Fecha Creación</th>
-              <th class="py-2.5 px-3">Nombre Archivo</th>
+              <th class="py-2.5 px-3">Copia de Seguridad</th>
               <th class="py-2.5 px-3">Tipo</th>
               <th class="py-2.5 px-3">Tamaño</th>
               <th class="py-2.5 px-3">Generado Por</th>
@@ -1199,7 +1253,7 @@ async function renderBackupsExploradorView(container) {
         <table class="w-full text-left text-xs border-collapse" id="tablaExploradorBackups">
           <thead class="bg-slate-50 text-slate-500 font-semibold uppercase text-[10px] border-b border-slate-200">
             <tr>
-              <th class="py-2.5 px-3">Archivo</th>
+              <th class="py-2.5 px-3">Copia de Seguridad</th>
               <th class="py-2.5 px-3">Fecha en Disco</th>
               <th class="py-2.5 px-3">Tamaño</th>
               <th class="py-2.5 px-3">Tipo</th>
@@ -1237,10 +1291,11 @@ function renderFilaExploradorBackup(f) {
 
   // Badge de tipo
   let tipoBadge;
+  const tipoTxt = formatTipoBackupVisible(f.db_type);
   if (f.db_type === 'MANUAL') {
-    tipoBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800">MANUAL</span>';
+    tipoBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800">${esc(tipoTxt)}</span>`;
   } else if (f.db_type) {
-    tipoBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800">${esc(f.db_type)}</span>`;
+    tipoBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800">${esc(tipoTxt)}</span>`;
   } else {
     tipoBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-200">Externo</span>';
   }
@@ -1292,7 +1347,7 @@ function renderFilaExploradorBackup(f) {
   return `
     <tr class="${rowClass}">
       <td class="py-2.5 px-3">
-        <div class="font-mono font-bold text-slate-900 text-[11px] break-all">${esc(f.filename)}</div>
+        <div class="font-semibold text-slate-900 text-xs">${esc(formatNombreBackupVisible(f.filename))}</div>
         ${creatorInfo}
       </td>
       <td class="py-2.5 px-3 font-mono text-[11px] text-slate-700">${esc(f.modified_at)}</td>
@@ -1331,8 +1386,8 @@ function explorarVerInfoHuerfano(filename, size, fecha) {
           <table class="w-full border-collapse border border-slate-200 rounded overflow-hidden">
             <tbody>
               <tr class="border-b border-slate-200 bg-slate-50">
-                <td class="py-2 px-3 font-semibold text-slate-600 w-1/3">Archivo</td>
-                <td class="py-2 px-3 font-mono font-bold text-slate-900 break-all">${esc(filename)}</td>
+                <td class="py-2 px-3 font-semibold text-slate-600 w-1/3">Copia de seguridad</td>
+                <td class="py-2 px-3 font-semibold text-slate-900 break-all">${esc(formatNombreBackupVisible(filename))}</td>
               </tr>
               <tr class="border-b border-slate-200">
                 <td class="py-2 px-3 font-semibold text-slate-600">Fecha en disco</td>
@@ -1484,8 +1539,8 @@ async function renderBackupsHistorialView(container) {
               <th class="py-2.5 px-3">Inicio</th>
               <th class="py-2.5 px-3">Fin</th>
               <th class="py-2.5 px-3">Duración</th>
-              <th class="py-2.5 px-3">Origen</th>
-              <th class="py-2.5 px-3">Archivo</th>
+              <th class="py-2.5 px-3">Tipo</th>
+              <th class="py-2.5 px-3">Copia de Seguridad</th>
               <th class="py-2.5 px-3">Usuario / Disparador</th>
               <th class="py-2.5 px-3 text-center">Estado</th>
               <th class="py-2.5 px-3 text-right">Detalle</th>
@@ -1499,10 +1554,10 @@ async function renderBackupsHistorialView(container) {
                 <td class="py-2.5 px-3 text-slate-600 font-medium">${esc(h.duration_str || '--')}</td>
                 <td class="py-2.5 px-3">
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold ${h.trigger === 'MANUAL' ? 'bg-purple-100 text-purple-800' : 'bg-sky-100 text-sky-800'}">
-                    ${esc(h.trigger)}
+                    ${esc(formatTipoBackupVisible(h.trigger))}
                   </span>
                 </td>
-                <td class="py-2.5 px-3 font-mono text-[11px] text-slate-900">${esc(h.filename || '--')}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(formatNombreBackupVisible(h.filename))}</td>
                 <td class="py-2.5 px-3 text-slate-600">${esc(h.user_name || 'Sistema')}</td>
                 <td class="py-2.5 px-3 text-center">
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold ${h.status === 'CORRECTO' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
@@ -1547,8 +1602,8 @@ async function renderBackupsRestauracionesView(container) {
             <tr>
               <th class="py-2.5 px-3">Fecha Inicio</th>
               <th class="py-2.5 px-3">Duración</th>
-              <th class="py-2.5 px-3">Backup Origen</th>
-              <th class="py-2.5 px-3">Base Destino (Prueba)</th>
+              <th class="py-2.5 px-3">Copia utilizada</th>
+              <th class="py-2.5 px-3">Base restaurada de prueba</th>
               <th class="py-2.5 px-3">Usuario</th>
               <th class="py-2.5 px-3 text-center">Estado</th>
               <th class="py-2.5 px-3 text-right">Resultado</th>
@@ -1559,8 +1614,8 @@ async function renderBackupsRestauracionesView(container) {
               <tr class="hover:bg-slate-50 transition-colors">
                 <td class="py-2.5 px-3 font-semibold text-slate-800">${esc(r.started_at)}</td>
                 <td class="py-2.5 px-3 text-slate-600">${esc(r.duration_str || '--')}</td>
-                <td class="py-2.5 px-3 font-mono text-[11px] text-slate-900">${esc(r.filename || '--')}</td>
-                <td class="py-2.5 px-3 font-bold text-amber-800 font-mono">${esc(r.target_database)}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(formatNombreBackupVisible(r.filename))}</td>
+                <td class="py-2.5 px-3 font-semibold text-amber-800">${esc(formatNombreRestauracionVisible(r.target_database))}</td>
                 <td class="py-2.5 px-3 text-slate-600">${esc(r.user_name || 'Sistema')}</td>
                 <td class="py-2.5 px-3 text-center">
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold ${r.status === 'CORRECTO' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
@@ -1619,10 +1674,10 @@ async function ejecutarCrearBackupAdmin() {
         html: `
           <div class="text-left text-xs space-y-1.5 mt-2">
             <p class="text-slate-600">La copia de seguridad binaria fue generada con éxito:</p>
-            <div class="p-2.5 bg-slate-50 border border-slate-200 rounded font-mono text-slate-800 text-xs">
-              <div><strong>Archivo:</strong> ${esc(res.filename)}</div>
+            <div class="p-2.5 bg-slate-50 border border-slate-200 rounded text-slate-800 text-xs space-y-1">
+              <div><strong>Copia de seguridad:</strong> <span class="font-semibold text-slate-900">${esc(formatNombreBackupVisible(res.filename))}</span></div>
               <div><strong>Tamaño:</strong> ${esc(res.size_formatted)}</div>
-              <div><strong>Tipo:</strong> ${esc(res.backup_type)}</div>
+              <div><strong>Tipo:</strong> <span class="font-semibold text-purple-700">${esc(formatTipoBackupVisible(res.backup_type))}</span></div>
             </div>
           </div>
         `,
@@ -1737,8 +1792,8 @@ async function verDetalleBackupAdmin(id) {
             <table class="w-full border-collapse border border-slate-200 rounded overflow-hidden shadow-2xs">
               <tbody>
                 <tr class="border-b border-slate-200 bg-slate-50">
-                  <td class="py-2.5 px-3 font-semibold text-slate-600 w-1/3">Archivo</td>
-                  <td class="py-2.5 px-3 font-mono font-bold text-slate-900 break-all">${esc(b.filename)}</td>
+                  <td class="py-2.5 px-3 font-semibold text-slate-600 w-1/3">Copia de seguridad</td>
+                  <td class="py-2.5 px-3 font-semibold text-slate-900 break-all">${esc(formatNombreBackupVisible(b.filename))}</td>
                 </tr>
                 <tr class="border-b border-slate-200">
                   <td class="py-2 px-3 font-semibold text-slate-600">Fecha de Creación</td>
@@ -1748,7 +1803,7 @@ async function verDetalleBackupAdmin(id) {
                   <td class="py-2 px-3 font-semibold text-slate-600">Tipo</td>
                   <td class="py-2 px-3">
                     <span class="px-2 py-0.5 rounded text-[10px] font-bold ${b.backup_type === 'MANUAL' ? 'bg-purple-100 text-purple-800' : 'bg-sky-100 text-sky-800'}">
-                      ${esc(b.backup_type)}
+                      ${esc(formatTipoBackupVisible(b.backup_type))}
                     </span>
                   </td>
                 </tr>
@@ -1794,10 +1849,10 @@ async function verDetalleBackupAdmin(id) {
         confirmButtonColor: '#0f172a'
       });
     } else {
-      document.getElementById('detFilename').innerText = b.filename;
+      document.getElementById('detFilename').innerText = formatNombreBackupVisible(b.filename);
       document.getElementById('detPath').innerText = b.path;
       document.getElementById('detSize').innerText = `${b.size_formatted} (${b.size_bytes.toLocaleString()} bytes)`;
-      document.getElementById('detType').innerText = b.backup_type;
+      document.getElementById('detType').innerText = formatTipoBackupVisible(b.backup_type);
       document.getElementById('detStatus').innerText = b.status;
       document.getElementById('detFecha').innerText = b.created_at;
       document.getElementById('detUsuario').innerText = b.usuario;
@@ -1829,17 +1884,17 @@ async function restaurarBackupAdmin(id, filename) {
       title: '<span class="text-base font-bold text-slate-900 flex items-center justify-center gap-2"><i class="fa fa-rotate-left text-amber-500"></i> Confirmar Restauración</span>',
       html: `
         <div class="text-left text-xs text-slate-600 space-y-2 mt-2">
-          <p>Se restaurará la copia <strong>${esc(filename)}</strong> ejecutando <code>pg_restore</code> en una base de datos de prueba aislada para verificar tablas e índices.</p>
+          <p>Se restaurará la copia <strong>${esc(formatNombreBackupVisible(filename))}</strong> ejecutando <code>pg_restore</code> en una base de datos de prueba aislada para verificar tablas e índices.</p>
           <div class="p-2.5 bg-amber-50 border border-amber-200 rounded text-amber-900 text-[11px] leading-relaxed">
             <i class="fa fa-shield-halved text-amber-600 mr-1"></i>
             <strong>Aislamiento de Seguridad:</strong> Está prohibido restaurar sobre la base de producción <code>portal_academico</code>.
           </div>
-          <label class="block font-semibold text-slate-700 pt-1">Nombre de la Base de Datos de Prueba Destino:</label>
+          <label class="block font-semibold text-slate-700 pt-1">Base restaurada de prueba:</label>
         </div>
       `,
       input: 'text',
       inputValue: 'portal_academico_restaurado_prueba',
-      inputPlaceholder: 'Nombre de la base de prueba (solo letras, números y _)',
+      inputPlaceholder: 'Base restaurada de prueba',
       showCancelButton: true,
       confirmButtonText: '<i class="fa fa-play mr-1"></i> Restaurar Base de Prueba',
       cancelButtonText: 'Cancelar',
@@ -1882,7 +1937,7 @@ async function restaurarBackupAdmin(id, filename) {
 
 function abrirModalRestaurarAdmin(id, filename) {
   document.getElementById('restaurarBackupId').value = id;
-  document.getElementById('restaurarFilename').value = filename;
+  document.getElementById('restaurarFilename').value = formatNombreBackupVisible(filename);
   document.getElementById('restaurarTargetDb').value = 'portal_academico_restaurado_prueba';
   document.getElementById('restaurarLoader').classList.add('hidden');
   document.getElementById('restaurarAlert').classList.add('hidden');
@@ -1904,7 +1959,7 @@ async function ejecutarRestaurarBackupAdmin() {
   const alertEl = document.getElementById('restaurarAlert');
 
   if (!targetDb) {
-    alert('Ingrese un nombre para la base de datos destino.');
+    alert('Ingrese un nombre para la base restaurada de prueba.');
     return;
   }
 
@@ -1945,8 +2000,8 @@ async function eliminarBackupAdmin(id, filename) {
       text: 'Esta acción eliminará el archivo de respaldo y no se podrá recuperar.',
       html: `
         <p class="text-xs text-slate-600 mb-3">Esta acción eliminará el archivo de respaldo y no se podrá recuperar.</p>
-        <div class="p-2.5 bg-slate-100 rounded font-mono font-bold text-xs text-slate-800 break-all text-left border border-slate-200">
-          <i class="fa fa-file-shield text-slate-500 mr-1"></i> ${esc(filename || `Copia #${id}`)}
+        <div class="p-2.5 bg-slate-100 rounded font-semibold text-xs text-slate-800 break-all text-left border border-slate-200">
+          <i class="fa fa-file-shield text-slate-500 mr-1"></i> ${esc(formatNombreBackupVisible(filename) || `Copia #${id}`)}
         </div>
       `,
       icon: 'warning',
@@ -2213,7 +2268,7 @@ async function probarProgramacionAdmin(id, name) {
   if (typeof Swal !== 'undefined') {
     const result = await Swal.fire({
       title: '¿Ejecutar programación ahora?',
-      html: `Se forzará la creación inmediata de una copia de seguridad para la política <strong>"${esc(name || `ID #${id}`)}"</strong> bajo demanda (registrada como MANUAL).`,
+      html: `Se forzará la creación inmediata de una copia de seguridad para la política <strong>"${esc(name || `ID #${id}`)}"</strong> bajo demanda (registrada como Manual).`,
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: '<i class="fa fa-play mr-1"></i> Ejecutar Ahora',
@@ -2441,16 +2496,16 @@ function verHistorialDetalleAdmin(id) {
                 <td class="py-2 px-3 font-semibold text-purple-700">${esc(h.duration_str || '--')}</td>
               </tr>
               <tr class="border-b border-slate-200">
-                <td class="py-2 px-3 font-semibold text-slate-600">Origen</td>
+                <td class="py-2 px-3 font-semibold text-slate-600">Tipo</td>
                 <td class="py-2 px-3">
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold ${h.trigger === 'MANUAL' ? 'bg-purple-100 text-purple-800' : 'bg-sky-100 text-sky-800'}">
-                    ${esc(h.trigger || '--')}
+                    ${esc(formatTipoBackupVisible(h.trigger) || '--')}
                   </span>
                 </td>
               </tr>
               <tr class="border-b border-slate-200 bg-slate-50">
-                <td class="py-2 px-3 font-semibold text-slate-600">Archivo</td>
-                <td class="py-2 px-3 font-mono text-[11px] font-bold text-slate-900 break-all">${esc(h.filename || 'N/A')}</td>
+                <td class="py-2 px-3 font-semibold text-slate-600">Copia de seguridad</td>
+                <td class="py-2 px-3 font-semibold text-slate-900 break-all">${esc(formatNombreBackupVisible(h.filename) || 'N/A')}</td>
               </tr>
               <tr class="border-b border-slate-200">
                 <td class="py-2 px-3 font-semibold text-slate-600">Estado</td>
@@ -2474,7 +2529,7 @@ function verHistorialDetalleAdmin(id) {
       confirmButtonColor: '#0f172a'
     });
   } else {
-    alert(`Operación #${h.id}\nInicio: ${h.started_at}\nFin: ${h.finished_at}\nDuración: ${h.duration_str}\nOrigen: ${h.trigger}\nArchivo: ${h.filename}\nEstado: ${h.status}\nMensaje: ${h.message}`);
+    alert(`Operación #${h.id}\nInicio: ${h.started_at}\nFin: ${h.finished_at}\nDuración: ${h.duration_str}\nTipo: ${formatTipoBackupVisible(h.trigger)}\nCopia: ${formatNombreBackupVisible(h.filename)}\nEstado: ${h.status}\nMensaje: ${h.message}`);
   }
 }
 
@@ -2497,12 +2552,12 @@ function verRestauracionDetalleAdmin(id) {
           <table class="w-full border-collapse border border-slate-200 rounded overflow-hidden shadow-2xs">
             <tbody>
               <tr class="border-b border-slate-200 bg-slate-50">
-                <td class="py-2.5 px-3 font-semibold text-slate-600 w-1/3">Backup</td>
-                <td class="py-2.5 px-3 font-mono font-bold text-slate-900 break-all">${esc(r.filename || 'N/A')}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-600 w-1/3">Copia utilizada</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-900 break-all">${esc(formatNombreBackupVisible(r.filename) || 'N/A')}</td>
               </tr>
               <tr class="border-b border-slate-200">
-                <td class="py-2 px-3 font-semibold text-slate-600">Base destino</td>
-                <td class="py-2 px-3 font-mono font-bold text-amber-800">${esc(r.target_database)}</td>
+                <td class="py-2 px-3 font-semibold text-slate-600">Base restaurada de prueba</td>
+                <td class="py-2 px-3 font-semibold text-amber-800">${esc(formatNombreRestauracionVisible(r.target_database))}</td>
               </tr>
               <tr class="border-b border-slate-200 bg-slate-50">
                 <td class="py-2 px-3 font-semibold text-slate-600">Fecha</td>
@@ -2534,7 +2589,7 @@ function verRestauracionDetalleAdmin(id) {
       confirmButtonColor: '#0f172a'
     });
   } else {
-    alert(`Restauración #${r.id}\nBackup: ${r.filename}\nBase destino: ${r.target_database}\nFecha: ${r.started_at}\nDuración: ${r.duration_str}\nEstado: ${r.status}\nMensaje: ${r.message}`);
+    alert(`Restauración #${r.id}\nCopia utilizada: ${formatNombreBackupVisible(r.filename)}\nBase restaurada de prueba: ${formatNombreRestauracionVisible(r.target_database)}\nFecha: ${r.started_at}\nDuración: ${r.duration_str}\nEstado: ${r.status}\nMensaje: ${r.message}`);
   }
 }
 
@@ -2544,7 +2599,7 @@ function verLogHistorialAdmin(mensaje, startedAt, filename) {
       title: '<span class="text-base font-bold text-slate-900"><i class="fa fa-terminal text-slate-600 mr-1"></i> Log de Ejecución</span>',
       html: `
         <div class="text-left text-xs space-y-2 mt-2">
-          <div class="text-slate-500 font-mono text-[11px]">${esc(startedAt)} | Archivo: <strong>${esc(filename || '--')}</strong></div>
+          <div class="text-slate-500 text-[11px]">${esc(startedAt)} | Copia: <strong>${esc(formatNombreBackupVisible(filename) || '--')}</strong></div>
           <pre class="bg-slate-900 text-emerald-400 p-3 rounded font-mono text-[11px] whitespace-pre-wrap overflow-x-auto max-h-60 border border-slate-800 text-left">${esc(mensaje || 'Operación ejecutada con éxito.')}</pre>
         </div>
       `,
@@ -2562,7 +2617,7 @@ function verResultadoRestauracionAdmin(mensaje, startedAt, targetDb) {
       title: '<span class="text-base font-bold text-slate-900"><i class="fa fa-database text-amber-500 mr-1"></i> Resultado de Restauración</span>',
       html: `
         <div class="text-left text-xs space-y-2 mt-2">
-          <div class="text-slate-500 font-mono text-[11px]">Base: <strong>${esc(targetDb)}</strong> | Inicio: ${esc(startedAt)}</div>
+          <div class="text-slate-500 text-[11px]">Base: <strong>${esc(formatNombreRestauracionVisible(targetDb))}</strong> | Inicio: ${esc(startedAt)}</div>
           <div class="bg-slate-50 text-slate-800 p-3 rounded text-xs border border-slate-200 leading-relaxed text-left">${esc(mensaje || 'Sin detalles adicionales')}</div>
         </div>
       `,
