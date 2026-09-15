@@ -287,6 +287,7 @@ class BackupFile(Base):
     status: Mapped[str] = mapped_column(String(50), default="CORRECTO", index=True) # CORRECTO, ERROR, ELIMINADO_RETENCION, INVALIDO
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     retention_deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     retention_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -332,6 +333,7 @@ class RestoreHistory(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     backup_file_id: Mapped[int | None] = mapped_column(ForeignKey("backup_files.id", ondelete="SET NULL"), nullable=True)
     target_database: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="EN_PROCESO") # EN_PROCESO, CORRECTO, ERROR

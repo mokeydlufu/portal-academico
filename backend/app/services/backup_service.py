@@ -146,7 +146,8 @@ def crear_backup(
     db: Session,
     user_id: int | None = None,
     trigger: str = "MANUAL",
-    schedule_id: int | None = None
+    schedule_id: int | None = None,
+    description: str | None = None
 ) -> BackupFile:
     """
     Genera un respaldo real con pg_dump en formato Custom (-F c).
@@ -167,7 +168,7 @@ def crear_backup(
             )
 
         try:
-            return _ejecutar_crear_backup_proceso(db, user_id, trigger, schedule_id)
+            return _ejecutar_crear_backup_proceso(db, user_id, trigger, schedule_id, description)
         finally:
             try:
                 lock_conn.execute(
@@ -181,7 +182,8 @@ def _ejecutar_crear_backup_proceso(
     db: Session,
     user_id: int | None = None,
     trigger: str = "MANUAL",
-    schedule_id: int | None = None
+    schedule_id: int | None = None,
+    description: str | None = None
 ) -> BackupFile:
     pg_dump_path = get_pg_tool_path("pg_dump")
     if not pg_dump_path:
@@ -294,6 +296,7 @@ def _ejecutar_crear_backup_proceso(
     # Registrar el archivo en backup_files
     backup_file = BackupFile(
         filename=filename,
+        description=description.strip() if (description and description.strip()) else None,
         path=str(output_path),
         size_bytes=file_size,
         backup_type=trigger,
@@ -431,7 +434,13 @@ def eliminar_backup(db: Session, backup_id: int, user_id: int | None = None) -> 
     db.commit()
     return True
 
-def restaurar_backup_prueba(db: Session, backup_id: int, target_db: str, user_id: int | None = None) -> dict:
+def restaurar_backup_prueba(
+    db: Session,
+    backup_id: int,
+    target_db: str,
+    user_id: int | None = None,
+    description: str | None = None
+) -> dict:
     """
     Restaura una copia de seguridad como BASE DE DATOS DE PRUEBA.
     Evita SQL Injection, prohíbe restaurar sobre la base de producción,
@@ -471,6 +480,7 @@ def restaurar_backup_prueba(db: Session, backup_id: int, target_db: str, user_id
     restore_entry = RestoreHistory(
         backup_file_id=backup.id,
         target_database=target_db,
+        description=description.strip() if (description and description.strip()) else None,
         started_at=now_utc,
         status="EN_PROCESO",
         created_by=user_id

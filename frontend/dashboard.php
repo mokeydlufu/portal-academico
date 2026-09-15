@@ -295,6 +295,11 @@ if (!in_array($_SESSION['rol'] ?? '', ['ADMIN', 'ADMINISTRADOR'])) {
       </div>
       <div class="p-5 text-xs space-y-3">
         <div id="crearBackupAlert" class="hidden"></div>
+        <div>
+          <label for="crearBackupNombre" class="block font-semibold text-slate-700 mb-1">Nombre descriptivo de la copia:</label>
+          <input type="text" id="crearBackupNombre" placeholder="Ej: Backup antes de actualizar matrículas" class="w-full border border-slate-300 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-purple-500">
+          <span class="text-[10px] text-slate-500 mt-0.5 block">Identificador claro para reconocer fácilmente el propósito de este backup.</span>
+        </div>
         <p class="text-slate-600 leading-relaxed">
           Se generará una copia de seguridad oficial y completa de la base de datos PostgreSQL utilizando el formato binario comprimido de <code class="bg-slate-100 px-1 py-0.5 rounded text-purple-700 font-semibold">pg_dump (-F c)</code>.
         </p>
@@ -339,6 +344,7 @@ if (!in_array($_SESSION['rol'] ?? '', ['ADMIN', 'ADMINISTRADOR'])) {
       </div>
       <div class="p-5 text-xs space-y-3">
         <div class="bg-slate-50 border border-slate-200 rounded p-3 space-y-2 text-[11px]">
+          <div><span class="text-slate-500 font-medium">Nombre descriptivo:</span> <span id="detDescripcion" class="font-bold text-purple-800 block text-xs">--</span></div>
           <div><span class="text-slate-500 font-medium">Copia de seguridad:</span> <span id="detFilename" class="font-bold text-slate-800 block text-xs">...</span></div>
           <div><span class="text-slate-500 font-medium">Ruta en Disco:</span> <span id="detPath" class="font-mono text-slate-600 block text-[10px] break-all">...</span></div>
           <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200">
@@ -383,6 +389,12 @@ if (!in_array($_SESSION['rol'] ?? '', ['ADMIN', 'ADMINISTRADOR'])) {
         <div>
           <label class="block font-semibold text-slate-700 mb-1">Copia utilizada:</label>
           <input type="text" id="restaurarFilename" readonly class="w-full bg-slate-100 border border-slate-300 rounded px-3 py-1.5 font-mono text-[11px] text-slate-800">
+        </div>
+
+        <div>
+          <label for="restaurarDescripcion" class="block font-semibold text-slate-700 mb-1">Nombre descriptivo de la restauración:</label>
+          <input type="text" id="restaurarDescripcion" placeholder="Ej: Restauración de prueba de matrículas" class="w-full border border-slate-300 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-amber-500">
+          <span class="text-[10px] text-slate-500 mt-0.5 block">Nombre descriptivo para registrar el motivo o referencia de esta restauración.</span>
         </div>
 
         <div>

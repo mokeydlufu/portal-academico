@@ -923,7 +923,10 @@ async function eliminarMatriculaConfirm(id) {
  * en un texto visible limpio y profesional:
  * Backup 15/09/2026 - 17:55:09
  */
-function formatNombreBackupVisible(filename) {
+function formatNombreBackupVisible(filename, description) {
+  if (description && String(description).trim()) {
+    return String(description).trim();
+  }
   if (!filename) return '--';
   const str = String(filename);
   if (str.toLowerCase().includes('restore') || str.toLowerCase().includes('restaurad')) {
@@ -940,10 +943,13 @@ function formatNombreBackupVisible(filename) {
 /**
  * Convierte un nombre técnico de base restaurada como:
  * portal_academico_restore_20260915_175509 o portal_academico_restaurado_20260915_175509
- * en un texto visible profesional:
+ * en un texto visible profesional o muestra el nombre descriptivo si fue provisto:
  * Restauración 15/09/2026 - 17:55:09
  */
-function formatNombreRestauracionVisible(nombre) {
+function formatNombreRestauracionVisible(nombre, description) {
+  if (description && String(description).trim()) {
+    return String(description).trim();
+  }
   if (!nombre) return '--';
   const str = String(nombre);
   const m = str.match(/(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})/);
@@ -977,7 +983,7 @@ async function renderBackupsPanelView(container) {
   ]);
 
   const h = summary.health;
-  const lastBackupVisible = formatNombreBackupVisible(summary.last_backup_file);
+  const lastBackupVisible = formatNombreBackupVisible(summary.last_backup_file, summary.last_backup_description);
 
   container.innerHTML = `
     <!-- Encabezado -->
@@ -1090,7 +1096,7 @@ function renderFilaBackupAdmin(b) {
   return `
     <tr class="hover:bg-slate-50 transition-colors">
       <td class="py-2.5 px-3 font-semibold text-slate-800">${esc(b.created_at)}</td>
-      <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(formatNombreBackupVisible(b.filename))}</td>
+      <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(formatNombreBackupVisible(b.filename, b.description))}</td>
       <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">${esc(formatTipoBackupVisible(b.backup_type))}</span></td>
       <td class="py-2.5 px-3 font-medium text-slate-700">${esc(b.size_formatted)}</td>
       <td class="py-2.5 px-3 text-center">
@@ -1106,17 +1112,17 @@ function renderFilaBackupAdmin(b) {
           <button onclick="verDetalleBackupAdmin(${b.id})" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded text-[11px] cursor-pointer" title="Ver detalle completo">
             <i class="fa fa-eye"></i>
           </button>
-          <button onclick="restaurarBackupAdmin(${b.id}, '${esc(b.filename)}')" class="bg-amber-50 hover:bg-amber-100 text-amber-700 px-2 py-1 rounded text-[11px] cursor-pointer" title="Restaurar en base de prueba">
+          <button onclick="restaurarBackupAdmin(${b.id}, '${esc(b.filename)}', '${esc(b.description || '')}')" class="bg-amber-50 hover:bg-amber-100 text-amber-700 px-2 py-1 rounded text-[11px] cursor-pointer" title="Restaurar en base de prueba">
             <i class="fa fa-rotate-left"></i>
           </button>
-          <button onclick="eliminarBackupAdmin(${b.id}, '${esc(b.filename)}')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1 rounded text-[11px] cursor-pointer" title="Eliminar copia de seguridad">
+          <button onclick="eliminarBackupAdmin(${b.id}, '${esc(b.filename)}', '${esc(b.description || '')}')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1 rounded text-[11px] cursor-pointer" title="Eliminar copia de seguridad">
             <i class="fa fa-trash"></i>
           </button>
         ` : `
           <button onclick="verDetalleBackupAdmin(${b.id})" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded text-[11px] cursor-pointer" title="Ver detalle">
             <i class="fa fa-eye"></i>
           </button>
-          <button onclick="eliminarBackupAdmin(${b.id}, '${esc(b.filename)}')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1 rounded text-[11px] cursor-pointer" title="Eliminar registro">
+          <button onclick="eliminarBackupAdmin(${b.id}, '${esc(b.filename)}', '${esc(b.description || '')}')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1 rounded text-[11px] cursor-pointer" title="Eliminar registro">
             <i class="fa fa-trash"></i>
           </button>
         `}
@@ -1322,15 +1328,15 @@ function renderFilaExploradorBackup(f) {
          <i class="fa fa-circle-info"></i>
        </button>`;
 
-  const btnRestaurar = puedeRestaurar
-    ? `<button onclick="restaurarBackupAdmin(${f.db_id}, '${esc(f.filename)}')"
+  const btnRestaurar = (puedeRestaurar && f.db_id)
+    ? `<button onclick="restaurarBackupAdmin(${f.db_id}, '${esc(f.filename)}', '${esc(f.db_description || '')}')"
          class="bg-amber-50 hover:bg-amber-100 text-amber-700 px-2 py-1 rounded text-[11px] cursor-pointer transition-colors" title="Restaurar en base de prueba">
          <i class="fa fa-rotate-left"></i>
        </button>`
     : '';
 
-  const btnEliminar = puedeEliminar
-    ? `<button onclick="eliminarBackupAdmin(${f.db_id}, '${esc(f.filename)}')"
+  const btnEliminar = (puedeEliminar && f.db_id)
+    ? `<button onclick="eliminarBackupAdmin(${f.db_id}, '${esc(f.filename)}', '${esc(f.db_description || '')}')"
          class="bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1 rounded text-[11px] cursor-pointer transition-colors" title="Eliminar">
          <i class="fa fa-trash"></i>
        </button>`
@@ -1347,7 +1353,7 @@ function renderFilaExploradorBackup(f) {
   return `
     <tr class="${rowClass}">
       <td class="py-2.5 px-3">
-        <div class="font-semibold text-slate-900 text-xs">${esc(formatNombreBackupVisible(f.filename))}</div>
+        <div class="font-semibold text-slate-900 text-xs">${esc(formatNombreBackupVisible(f.filename, f.db_description))}</div>
         ${creatorInfo}
       </td>
       <td class="py-2.5 px-3 font-mono text-[11px] text-slate-700">${esc(f.modified_at)}</td>
@@ -1557,7 +1563,7 @@ async function renderBackupsHistorialView(container) {
                     ${esc(formatTipoBackupVisible(h.trigger))}
                   </span>
                 </td>
-                <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(formatNombreBackupVisible(h.filename))}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(formatNombreBackupVisible(h.filename, h.description))}</td>
                 <td class="py-2.5 px-3 text-slate-600">${esc(h.user_name || 'Sistema')}</td>
                 <td class="py-2.5 px-3 text-center">
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold ${h.status === 'CORRECTO' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
@@ -1614,8 +1620,8 @@ async function renderBackupsRestauracionesView(container) {
               <tr class="hover:bg-slate-50 transition-colors">
                 <td class="py-2.5 px-3 font-semibold text-slate-800">${esc(r.started_at)}</td>
                 <td class="py-2.5 px-3 text-slate-600">${esc(r.duration_str || '--')}</td>
-                <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(formatNombreBackupVisible(r.filename))}</td>
-                <td class="py-2.5 px-3 font-semibold text-amber-800">${esc(formatNombreRestauracionVisible(r.target_database))}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(formatNombreBackupVisible(r.filename, r.backup_description))}</td>
+                <td class="py-2.5 px-3 font-semibold text-amber-800">${esc(formatNombreRestauracionVisible(r.target_database, r.description))}</td>
                 <td class="py-2.5 px-3 text-slate-600">${esc(r.user_name || 'Sistema')}</td>
                 <td class="py-2.5 px-3 text-center">
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold ${r.status === 'CORRECTO' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
@@ -1641,6 +1647,8 @@ async function renderBackupsRestauracionesView(container) {
 // =========================================================================
 
 function abrirModalCrearBackup() {
+  const descInput = document.getElementById('crearBackupNombre');
+  if (descInput) descInput.value = '';
   document.getElementById('crearBackupLoader').classList.add('hidden');
   document.getElementById('crearBackupAlert').classList.add('hidden');
   document.getElementById('btnConfirmarCrear').disabled = false;
@@ -1653,6 +1661,9 @@ function cerrarModalCrearBackup() {
 }
 
 async function ejecutarCrearBackupAdmin() {
+  const descInput = document.getElementById('crearBackupNombre');
+  const description = descInput ? descInput.value.trim() : '';
+
   const btn = document.getElementById('btnConfirmarCrear');
   const btnCancel = document.getElementById('btnCancelarCrear');
   const loader = document.getElementById('crearBackupLoader');
@@ -1664,10 +1675,14 @@ async function ejecutarCrearBackupAdmin() {
   alertEl.classList.add('hidden');
 
   try {
-    const res = await api('/backups', { method: 'POST' });
+    const res = await api('/backups', {
+      method: 'POST',
+      body: JSON.stringify({ description: description || null })
+    });
     cerrarModalCrearBackup();
 
     if (typeof Swal !== 'undefined') {
+      const nombreVisible = formatNombreBackupVisible(res.filename, res.description);
       await Swal.fire({
         icon: 'success',
         title: '¡Backup Creado Correctamente!',
@@ -1675,7 +1690,7 @@ async function ejecutarCrearBackupAdmin() {
           <div class="text-left text-xs space-y-1.5 mt-2">
             <p class="text-slate-600">La copia de seguridad binaria fue generada con éxito:</p>
             <div class="p-2.5 bg-slate-50 border border-slate-200 rounded text-slate-800 text-xs space-y-1">
-              <div><strong>Copia de seguridad:</strong> <span class="font-semibold text-slate-900">${esc(formatNombreBackupVisible(res.filename))}</span></div>
+              <div><strong>Nombre:</strong> <span class="font-semibold text-purple-700">${esc(nombreVisible)}</span></div>
               <div><strong>Tamaño:</strong> ${esc(res.size_formatted)}</div>
               <div><strong>Tipo:</strong> <span class="font-semibold text-purple-700">${esc(formatTipoBackupVisible(res.backup_type))}</span></div>
             </div>
@@ -1792,14 +1807,18 @@ async function verDetalleBackupAdmin(id) {
             <table class="w-full border-collapse border border-slate-200 rounded overflow-hidden shadow-2xs">
               <tbody>
                 <tr class="border-b border-slate-200 bg-slate-50">
-                  <td class="py-2.5 px-3 font-semibold text-slate-600 w-1/3">Copia de seguridad</td>
-                  <td class="py-2.5 px-3 font-semibold text-slate-900 break-all">${esc(formatNombreBackupVisible(b.filename))}</td>
+                  <td class="py-2.5 px-3 font-semibold text-slate-600 w-1/3">Nombre descriptivo</td>
+                  <td class="py-2.5 px-3 font-bold text-purple-800">${esc(b.description || '--')}</td>
                 </tr>
                 <tr class="border-b border-slate-200">
+                  <td class="py-2.5 px-3 font-semibold text-slate-600">Copia de seguridad</td>
+                  <td class="py-2.5 px-3 font-semibold text-slate-900 break-all">${esc(formatNombreBackupVisible(b.filename, b.description))}</td>
+                </tr>
+                <tr class="border-b border-slate-200 bg-slate-50">
                   <td class="py-2 px-3 font-semibold text-slate-600">Fecha de Creación</td>
                   <td class="py-2 px-3">${esc(b.created_at || '--')}</td>
                 </tr>
-                <tr class="border-b border-slate-200 bg-slate-50">
+                <tr class="border-b border-slate-200">
                   <td class="py-2 px-3 font-semibold text-slate-600">Tipo</td>
                   <td class="py-2 px-3">
                     <span class="px-2 py-0.5 rounded text-[10px] font-bold ${b.backup_type === 'MANUAL' ? 'bg-purple-100 text-purple-800' : 'bg-sky-100 text-sky-800'}">
@@ -1807,11 +1826,11 @@ async function verDetalleBackupAdmin(id) {
                     </span>
                   </td>
                 </tr>
-                <tr class="border-b border-slate-200">
+                <tr class="border-b border-slate-200 bg-slate-50">
                   <td class="py-2 px-3 font-semibold text-slate-600">Tamaño</td>
                   <td class="py-2 px-3 font-semibold">${esc(b.size_formatted)} <span class="text-slate-400 font-normal">(${Number(b.size_bytes || 0).toLocaleString()} bytes)</span></td>
                 </tr>
-                <tr class="border-b border-slate-200 bg-slate-50">
+                <tr class="border-b border-slate-200">
                   <td class="py-2 px-3 font-semibold text-slate-600">Estado</td>
                   <td class="py-2 px-3">
                     <span class="px-2 py-0.5 rounded text-[10px] font-bold ${b.status === 'CORRECTO' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
@@ -1819,19 +1838,19 @@ async function verDetalleBackupAdmin(id) {
                     </span>
                   </td>
                 </tr>
-                <tr class="border-b border-slate-200">
+                <tr class="border-b border-slate-200 bg-slate-50">
                   <td class="py-2 px-3 font-semibold text-slate-600">Inicio</td>
                   <td class="py-2 px-3 font-mono">${esc(b.started_at || b.created_at || '--')}</td>
                 </tr>
-                <tr class="border-b border-slate-200 bg-slate-50">
+                <tr class="border-b border-slate-200">
                   <td class="py-2 px-3 font-semibold text-slate-600">Fin</td>
                   <td class="py-2 px-3 font-mono">${esc(b.finished_at || '--')}</td>
                 </tr>
-                <tr class="border-b border-slate-200">
+                <tr class="border-b border-slate-200 bg-slate-50">
                   <td class="py-2 px-3 font-semibold text-slate-600">Duración</td>
                   <td class="py-2 px-3 font-semibold text-purple-700">${esc(b.duracion || '--')}</td>
                 </tr>
-                <tr class="border-b border-slate-200 bg-slate-50">
+                <tr class="border-b border-slate-200">
                   <td class="py-2 px-3 font-semibold text-slate-600">Mensaje</td>
                   <td class="py-2 px-3 text-slate-700">${esc(b.mensaje || 'Generado correctamente.')}</td>
                 </tr>
@@ -1849,7 +1868,9 @@ async function verDetalleBackupAdmin(id) {
         confirmButtonColor: '#0f172a'
       });
     } else {
-      document.getElementById('detFilename').innerText = formatNombreBackupVisible(b.filename);
+      const descEl = document.getElementById('detDescripcion');
+      if (descEl) descEl.innerText = b.description || '--';
+      document.getElementById('detFilename').innerText = formatNombreBackupVisible(b.filename, b.description);
       document.getElementById('detPath').innerText = b.path;
       document.getElementById('detSize').innerText = `${b.size_formatted} (${b.size_bytes.toLocaleString()} bytes)`;
       document.getElementById('detType').innerText = formatTipoBackupVisible(b.backup_type);
@@ -1878,23 +1899,30 @@ function cerrarModalDetalleBackup() {
   document.getElementById('modalDetalleBackup').classList.add('hidden');
 }
 
-async function restaurarBackupAdmin(id, filename) {
+async function restaurarBackupAdmin(id, filename, backupDescription = '') {
+  const nombreBackupVis = formatNombreBackupVisible(filename, backupDescription);
+
   if (typeof Swal !== 'undefined') {
-    const { value: targetDb } = await Swal.fire({
+    const { value: formValues } = await Swal.fire({
       title: '<span class="text-base font-bold text-slate-900 flex items-center justify-center gap-2"><i class="fa fa-rotate-left text-amber-500"></i> Confirmar Restauración</span>',
       html: `
         <div class="text-left text-xs text-slate-600 space-y-2 mt-2">
-          <p>Se restaurará la copia <strong>${esc(formatNombreBackupVisible(filename))}</strong> ejecutando <code>pg_restore</code> en una base de datos de prueba aislada para verificar tablas e índices.</p>
+          <p>Se restaurará la copia <strong>${esc(nombreBackupVis)}</strong> ejecutando <code>pg_restore</code> en una base de datos de prueba aislada para verificar tablas e índices.</p>
           <div class="p-2.5 bg-amber-50 border border-amber-200 rounded text-amber-900 text-[11px] leading-relaxed">
             <i class="fa fa-shield-halved text-amber-600 mr-1"></i>
             <strong>Aislamiento de Seguridad:</strong> Está prohibido restaurar sobre la base de producción <code>portal_academico</code>.
           </div>
-          <label class="block font-semibold text-slate-700 pt-1">Base restaurada de prueba:</label>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Nombre descriptivo de la restauración:</label>
+            <input type="text" id="swal-restore-description" placeholder="Ej: Restauración de prueba de matrículas" class="w-full border border-slate-300 rounded px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-amber-500">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Base restaurada de prueba:</label>
+            <input type="text" id="swal-restore-targetdb" value="portal_academico_restaurado_prueba" class="w-full border border-slate-300 rounded px-3 py-1.5 font-mono text-xs text-slate-800 focus:outline-none focus:border-amber-500">
+          </div>
         </div>
       `,
-      input: 'text',
-      inputValue: 'portal_academico_restaurado_prueba',
-      inputPlaceholder: 'Base restaurada de prueba',
+      focusConfirm: false,
       showCancelButton: true,
       confirmButtonText: '<i class="fa fa-play mr-1"></i> Restaurar Base de Prueba',
       cancelButtonText: 'Cancelar',
@@ -1902,15 +1930,23 @@ async function restaurarBackupAdmin(id, filename) {
       cancelButtonColor: '#64748b',
       reverseButtons: true,
       showLoaderOnConfirm: true,
-      preConfirm: async (dbName) => {
-        if (!dbName || !dbName.trim()) {
+      preConfirm: async () => {
+        const descInput = document.getElementById('swal-restore-description');
+        const dbInput = document.getElementById('swal-restore-targetdb');
+        const descVal = descInput ? descInput.value.trim() : '';
+        const dbName = dbInput ? dbInput.value.trim() : '';
+
+        if (!dbName) {
           Swal.showValidationMessage('Debe ingresar un nombre para la base de datos de prueba');
           return false;
         }
         try {
           const res = await api(`/backups/${id}/restore`, {
             method: 'POST',
-            body: JSON.stringify({ target_database: dbName.trim() })
+            body: JSON.stringify({
+              target_database: dbName,
+              description: descVal || null
+            })
           });
           return res;
         } catch (err) {
@@ -1921,23 +1957,25 @@ async function restaurarBackupAdmin(id, filename) {
       allowOutsideClick: () => !Swal.isLoading()
     });
 
-    if (targetDb) {
+    if (formValues) {
       await Swal.fire({
         icon: 'success',
         title: '¡Restauración Completada!',
-        text: targetDb.message || 'La base de prueba fue creada y restaurada exitosamente.',
+        text: formValues.message || 'La base de prueba fue creada y restaurada exitosamente.',
         confirmButtonColor: '#059669'
       });
       cargarModuloAdmin('backups-restauraciones');
     }
   } else {
-    abrirModalRestaurarAdmin(id, filename);
+    abrirModalRestaurarAdmin(id, filename, backupDescription);
   }
 }
 
-function abrirModalRestaurarAdmin(id, filename) {
+function abrirModalRestaurarAdmin(id, filename, backupDescription = '') {
   document.getElementById('restaurarBackupId').value = id;
-  document.getElementById('restaurarFilename').value = formatNombreBackupVisible(filename);
+  document.getElementById('restaurarFilename').value = formatNombreBackupVisible(filename, backupDescription);
+  const descEl = document.getElementById('restaurarDescripcion');
+  if (descEl) descEl.value = '';
   document.getElementById('restaurarTargetDb').value = 'portal_academico_restaurado_prueba';
   document.getElementById('restaurarLoader').classList.add('hidden');
   document.getElementById('restaurarAlert').classList.add('hidden');
@@ -1953,6 +1991,9 @@ function cerrarModalRestaurarAdmin() {
 async function ejecutarRestaurarBackupAdmin() {
   const id = document.getElementById('restaurarBackupId').value;
   const targetDb = document.getElementById('restaurarTargetDb').value.trim();
+  const descEl = document.getElementById('restaurarDescripcion');
+  const description = descEl ? descEl.value.trim() : '';
+
   const btn = document.getElementById('btnConfirmarRestaurar');
   const btnCancel = document.getElementById('btnCancelarRestaurar');
   const loader = document.getElementById('restaurarLoader');
@@ -1971,7 +2012,10 @@ async function ejecutarRestaurarBackupAdmin() {
   try {
     const res = await api(`/backups/${id}/restore`, {
       method: 'POST',
-      body: JSON.stringify({ target_database: targetDb })
+      body: JSON.stringify({
+        target_database: targetDb,
+        description: description || null
+      })
     });
 
     loader.classList.add('hidden');
@@ -1993,7 +2037,8 @@ async function ejecutarRestaurarBackupAdmin() {
   }
 }
 
-async function eliminarBackupAdmin(id, filename) {
+async function eliminarBackupAdmin(id, filename, description = '') {
+  const nombreVis = formatNombreBackupVisible(filename, description);
   if (typeof Swal !== 'undefined') {
     const result = await Swal.fire({
       title: '¿Eliminar esta copia de seguridad?',
@@ -2001,7 +2046,7 @@ async function eliminarBackupAdmin(id, filename) {
       html: `
         <p class="text-xs text-slate-600 mb-3">Esta acción eliminará el archivo de respaldo y no se podrá recuperar.</p>
         <div class="p-2.5 bg-slate-100 rounded font-semibold text-xs text-slate-800 break-all text-left border border-slate-200">
-          <i class="fa fa-file-shield text-slate-500 mr-1"></i> ${esc(formatNombreBackupVisible(filename) || `Copia #${id}`)}
+          <i class="fa fa-file-shield text-slate-500 mr-1"></i> ${esc(nombreVis || `Copia #${id}`)}
         </div>
       `,
       icon: 'warning',
@@ -2504,12 +2549,16 @@ function verHistorialDetalleAdmin(id) {
                 </td>
               </tr>
               <tr class="border-b border-slate-200 bg-slate-50">
-                <td class="py-2 px-3 font-semibold text-slate-600">Copia de seguridad</td>
-                <td class="py-2 px-3 font-semibold text-slate-900 break-all">${esc(formatNombreBackupVisible(h.filename) || 'N/A')}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-600">Nombre descriptivo</td>
+                <td class="py-2.5 px-3 font-bold text-purple-800">${esc(h.description || '--')}</td>
               </tr>
               <tr class="border-b border-slate-200">
-                <td class="py-2 px-3 font-semibold text-slate-600">Estado</td>
-                <td class="py-2 px-3">
+                <td class="py-2.5 px-3 font-semibold text-slate-600">Copia de seguridad</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-900 break-all">${esc(formatNombreBackupVisible(h.filename, h.description) || 'N/A')}</td>
+              </tr>
+              <tr class="border-b border-slate-200 bg-slate-50">
+                <td class="py-2.5 px-3 font-semibold text-slate-600">Estado</td>
+                <td class="py-2.5 px-3">
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold ${h.status === 'CORRECTO' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
                     ${esc(h.status)}
                   </span>
@@ -2529,7 +2578,7 @@ function verHistorialDetalleAdmin(id) {
       confirmButtonColor: '#0f172a'
     });
   } else {
-    alert(`Operación #${h.id}\nInicio: ${h.started_at}\nFin: ${h.finished_at}\nDuración: ${h.duration_str}\nTipo: ${formatTipoBackupVisible(h.trigger)}\nCopia: ${formatNombreBackupVisible(h.filename)}\nEstado: ${h.status}\nMensaje: ${h.message}`);
+    alert(`Operación #${h.id}\nNombre: ${h.description || '--'}\nInicio: ${h.started_at}\nFin: ${h.finished_at}\nDuración: ${h.duration_str}\nTipo: ${formatTipoBackupVisible(h.trigger)}\nCopia: ${formatNombreBackupVisible(h.filename, h.description)}\nEstado: ${h.status}\nMensaje: ${h.message}`);
   }
 }
 
@@ -2552,22 +2601,26 @@ function verRestauracionDetalleAdmin(id) {
           <table class="w-full border-collapse border border-slate-200 rounded overflow-hidden shadow-2xs">
             <tbody>
               <tr class="border-b border-slate-200 bg-slate-50">
-                <td class="py-2.5 px-3 font-semibold text-slate-600 w-1/3">Copia utilizada</td>
-                <td class="py-2.5 px-3 font-semibold text-slate-900 break-all">${esc(formatNombreBackupVisible(r.filename) || 'N/A')}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-600 w-1/3">Nombre descriptivo</td>
+                <td class="py-2.5 px-3 font-bold text-amber-800">${esc(r.description || '--')}</td>
               </tr>
               <tr class="border-b border-slate-200">
-                <td class="py-2 px-3 font-semibold text-slate-600">Base restaurada de prueba</td>
-                <td class="py-2 px-3 font-semibold text-amber-800">${esc(formatNombreRestauracionVisible(r.target_database))}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-600">Copia utilizada</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-900 break-all">${esc(formatNombreBackupVisible(r.filename, r.backup_description) || 'N/A')}</td>
               </tr>
               <tr class="border-b border-slate-200 bg-slate-50">
+                <td class="py-2 px-3 font-semibold text-slate-600">Base restaurada de prueba</td>
+                <td class="py-2 px-3 font-semibold text-amber-800">${esc(formatNombreRestauracionVisible(r.target_database, r.description))}</td>
+              </tr>
+              <tr class="border-b border-slate-200">
                 <td class="py-2 px-3 font-semibold text-slate-600">Fecha</td>
                 <td class="py-2 px-3 font-mono text-slate-800">${esc(r.started_at || '--')}</td>
               </tr>
-              <tr class="border-b border-slate-200">
+              <tr class="border-b border-slate-200 bg-slate-50">
                 <td class="py-2 px-3 font-semibold text-slate-600">Duración</td>
                 <td class="py-2 px-3 font-semibold text-purple-700">${esc(r.duration_str || '--')}</td>
               </tr>
-              <tr class="border-b border-slate-200 bg-slate-50">
+              <tr class="border-b border-slate-200">
                 <td class="py-2 px-3 font-semibold text-slate-600">Estado</td>
                 <td class="py-2 px-3">
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold ${r.status === 'CORRECTO' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">

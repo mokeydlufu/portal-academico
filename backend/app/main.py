@@ -7,7 +7,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 from .database import Base, engine, get_db, SessionLocal
 from . import models, schemas
 from .auth import verify_password, create_token, current_user, pwd_context
@@ -16,6 +16,15 @@ from .services.scheduler_service import scheduler_worker_loop
 from .routers import backups
 
 Base.metadata.create_all(bind=engine)
+
+# Garantizar columnas de descripción para copias de seguridad y restauraciones
+try:
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE backup_files ADD COLUMN IF NOT EXISTS description VARCHAR(255);"))
+        conn.execute(text("ALTER TABLE restore_history ADD COLUMN IF NOT EXISTS description VARCHAR(255);"))
+        conn.commit()
+except Exception as e:
+    print(f"[DB-MIGRATION] Aviso al verificar columnas de backup: {e}")
 
 # Crea un usuario administrador inicial si todavía no existe.
 with SessionLocal() as db:

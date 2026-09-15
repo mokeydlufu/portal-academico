@@ -1,9 +1,13 @@
 from datetime import datetime
 from pydantic import BaseModel, Field, model_validator
 
+class BackupCreateIn(BaseModel):
+    description: str | None = Field(default=None, max_length=255, description="Nombre descriptivo de la copia de seguridad")
+
 class BackupFileOut(BaseModel):
     id: int
     filename: str
+    description: str | None = None
     size_bytes: int
     size_formatted: str
     backup_type: str
@@ -81,6 +85,7 @@ class BackupHistoryOut(BaseModel):
     id: int
     backup_file_id: int | None = None
     filename: str | None = None
+    description: str | None = None
     schedule_id: int | None = None
     schedule_name: str | None = None
     started_at: str
@@ -102,12 +107,15 @@ class RestoreCreateIn(BaseModel):
         max_length=60,
         description="Nombre de la base de datos de prueba destino (solo letras, números y guión bajo)"
     )
+    description: str | None = Field(default=None, max_length=255, description="Nombre descriptivo de la restauración")
 
 class RestoreHistoryOut(BaseModel):
     id: int
     backup_file_id: int | None = None
     filename: str | None = None
     target_database: str
+    description: str | None = None
+    backup_description: str | None = None
     started_at: str
     finished_at: str | None = None
     duration_str: str | None = None
@@ -132,6 +140,7 @@ class HealthCheckOut(BaseModel):
 class BackupSummaryOut(BaseModel):
     last_backup_date: str | None = None
     last_backup_file: str | None = None
+    last_backup_description: str | None = None
     last_backup_status: str | None = None
     next_backup_date: str | None = None
     next_backup_schedule: str | None = None
@@ -146,6 +155,7 @@ class BackupFileOnDiskOut(BaseModel):
     size_formatted: str
     modified_at: str          # Fecha de modificación del archivo en disco
     db_id: int | None = None  # ID en backup_files (None = huérfano, no está en BD)
+    db_description: str | None = None # Nombre descriptivo en BD
     db_status: str | None = None   # Estado en BD (CORRECTO / ELIMINADO_RETENCION / None)
     db_type: str | None = None     # Tipo de backup según BD (MANUAL / PROGRAMADO / None)
     db_created_by: str | None = None  # Usuario que lo generó según BD

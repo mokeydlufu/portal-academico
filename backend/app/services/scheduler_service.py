@@ -193,7 +193,8 @@ def ejecutar_programacion_inmediata(schedule_id: int, user_id: int | None = None
             db=db,
             user_id=user_id or schedule.created_by,
             trigger="MANUAL",
-            schedule_id=schedule.id
+            schedule_id=schedule.id,
+            description=schedule.name
         )
         schedule.last_run_at = datetime.utcnow()
         db.commit()
@@ -250,7 +251,8 @@ async def scheduler_worker_loop():
                                         db=db,
                                         user_id=s.created_by,
                                         trigger="PROGRAMADO",
-                                        schedule_id=s.id
+                                        schedule_id=s.id,
+                                        description=s.name
                                     )
                                     print(f"[BACKUP-SCHEDULER] Respaldo automático '{s.name}' completado correctamente.")
                                 except Exception as e:

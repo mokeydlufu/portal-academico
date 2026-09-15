@@ -12,6 +12,7 @@ from ..database import get_db
 from ..models import BackupFile, BackupSchedule, BackupHistory, RestoreHistory, Usuario
 from ..auth import current_user, SECRET_KEY, ALGORITHM
 from ..schemas_backups import (
+    BackupCreateIn,
     BackupFileOut,
     BackupScheduleCreateIn,
     BackupScheduleUpdateIn,
@@ -126,6 +127,7 @@ def obtener_resumen(
     return BackupSummaryOut(
         last_backup_date=format_dt(last_backup.created_at) if last_backup else None,
         last_backup_file=last_backup.filename if last_backup else None,
+        last_backup_description=last_backup.description if last_backup else None,
         last_backup_status=last_backup.status if last_backup else None,
         next_backup_date=next_date,
         next_backup_schedule=next_name,
@@ -295,11 +297,13 @@ def listar_historial(
     resultado = []
     for r in rows:
         fn = r.backup_file.filename if r.backup_file else None
+        desc_val = r.backup_file.description if r.backup_file else None
         sn = r.schedule.name if r.schedule else None
         resultado.append(BackupHistoryOut(
             id=r.id,
             backup_file_id=r.backup_file_id,
             filename=fn,
+            description=desc_val,
             schedule_id=r.schedule_id,
             schedule_name=sn,
             started_at=format_dt(r.started_at) or "",
@@ -321,11 +325,14 @@ def listar_restauraciones(
     resultado = []
     for r in rows:
         fn = r.backup_file.filename if r.backup_file else None
+        b_desc = r.backup_file.description if r.backup_file else None
         resultado.append(RestoreHistoryOut(
             id=r.id,
             backup_file_id=r.backup_file_id,
             filename=fn,
             target_database=r.target_database,
+            description=r.description,
+            backup_description=b_desc,
             started_at=format_dt(r.started_at) or "",
             finished_at=format_dt(r.finished_at),
             duration_str=format_duration(r.started_at, r.finished_at),
@@ -348,6 +355,7 @@ def listar_backups(
         resultado.append(BackupFileOut(
             id=b.id,
             filename=b.filename,
+            description=b.description,
             size_bytes=b.size_bytes,
             size_formatted=format_size(b.size_bytes),
             backup_type=b.backup_type,
@@ -361,13 +369,16 @@ def listar_backups(
 
 @router.post("", response_model=BackupFileOut)
 def crear_backup_manual(
+    data: BackupCreateIn | None = None,
     db: Session = Depends(get_db),
     user: Usuario = Depends(require_admin)
 ):
-    backup_file = crear_backup(db, user_id=user.id, trigger="MANUAL")
+    desc_val = data.description if data else None
+    backup_file = crear_backup(db, user_id=user.id, trigger="MANUAL", description=desc_val)
     return BackupFileOut(
         id=backup_file.id,
         filename=backup_file.filename,
+        description=backup_file.description,
         size_bytes=backup_file.size_bytes,
         size_formatted=format_size(backup_file.size_bytes),
         backup_type=backup_file.backup_type,
@@ -432,6 +443,7 @@ def explorador_archivos_disco(
                     db_status=db_record.status,
                     db_type=db_record.backup_type,
                     db_created_by=created_by_name,
+                    db_description=db_record.description,
                     is_orphan=False
                 ))
             else:
@@ -445,6 +457,7 @@ def explorador_archivos_disco(
                     db_status=None,
                     db_type=None,
                     db_created_by=None,
+                    db_description=None,
                     is_orphan=True
                 ))
         except Exception:
@@ -473,6 +486,7 @@ def ver_detalle_backup(
     return {
         "id": b.id,
         "filename": b.filename,
+        "description": b.description,
         "path": b.path,
         "size_bytes": b.size_bytes,
         "size_formatted": format_size(b.size_bytes),
@@ -513,6 +527,7 @@ def restaurar_backup_endpoint(
         db=db,
         backup_id=id,
         target_db=data.target_database,
+        description=data.description,
         user_id=user.id
     )
     return resultado
