@@ -1,16 +1,17 @@
 FROM python:3.11-slim
 
-# Instalar dependencias del sistema y el cliente oficial de PostgreSQL 16 (para pg_dump y pg_restore reales)
+# Instalar dependencias del sistema y el cliente oficial de PostgreSQL 18 para coincidir con Render (v18.6)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gnupg \
     lsb-release \
     ca-certificates \
-    && (curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg && \
-        echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
-        apt-get update && apt-get install -y --no-install-recommends postgresql-client-16) || \
-        (apt-get update && apt-get install -y --no-install-recommends postgresql-client-15) \
-    && apt-get install -y --no-install-recommends \
+    postgresql-common \
+    && (/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y || \
+        (curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg && \
+         echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list)) \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-client-18 \
     php-cli \
     php-curl \
     php-pgsql \
