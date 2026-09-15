@@ -1,0 +1,38 @@
+# Entornos virtuales
+.venv/
+backend/.venv/
+env/
+venv/
+
+# Caches de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Archivos de respaldo de PostgreSQL (no incluir en repositorios o ZIP)
+*.backup
+*.dump
+storage/backups/*.backup
+backend/storage/backups/*.backup
+!storage/backups/.gitkeep
+!backend/storage/backups/.gitkeep
+
+# Secretos y variables de entorno
+.env
+backend/.env
+
+# Logs del sistema y temporales
+*.log
+*.tmp
+.pytest_cache/
+.coverage
+
+# Evitar duplicados del backend en la raíz (la fuente canónica es backend/app/)
+/app
+/app/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+

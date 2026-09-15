@@ -1,0 +1,42 @@
+services:
+  # ── SERVICIO BACKEND (FastAPI + Python + Docker) ──
+  - type: web
+    name: portal-academico-backend
+    runtime: docker
+    dockerContext: backend
+    dockerfilePath: backend/Dockerfile
+    plan: free
+    region: oregon
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: portal-academico-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 480
+      - key: BACKUP_DIR
+        value: storage/backups
+      - key: BACKUP_TIMEZONE
+        value: America/Lima
+
+  # ── SERVICIO FRONTEND (PHP + Apache + Docker) ──
+  - type: web
+    name: portal-academico-frontend
+    runtime: docker
+    dockerContext: frontend
+    dockerfilePath: frontend/Dockerfile
+    plan: free
+    region: oregon
+    envVars:
+      - key: API_URL
+        value: https://portal-academico-backend.onrender.com/api
+
+databases:
+  # ── BASE DE DATOS POSTGRESQL ──
+  - name: portal-academico-db
+    databaseName: portal_academico
+    user: postgres
+    plan: free
+    region: oregon
