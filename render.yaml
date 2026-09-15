@@ -37,6 +37,6 @@ databases:
   # ── BASE DE DATOS POSTGRESQL ──
   - name: portal-academico-db
     databaseName: portal_academico
-    user: postgres
+    user: portal_user
     plan: free
     region: oregon
