@@ -2,7 +2,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, model_validator
 
 class BackupCreateIn(BaseModel):
-    description: str | None = Field(default=None, max_length=255, description="Nombre descriptivo de la copia de seguridad")
+    description: str = Field(..., min_length=1, max_length=255, description="Nombre de la copia de seguridad")
 
 class BackupFileOut(BaseModel):
     id: int
@@ -107,7 +107,7 @@ class RestoreCreateIn(BaseModel):
         max_length=60,
         description="Nombre de la base de datos de prueba destino (solo letras, números y guión bajo)"
     )
-    description: str | None = Field(default=None, max_length=255, description="Nombre descriptivo de la restauración")
+    description: str = Field(..., min_length=1, max_length=255, description="Nombre de la restauración")
 
 class RestoreHistoryOut(BaseModel):
     id: int

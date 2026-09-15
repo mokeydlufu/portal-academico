@@ -369,12 +369,13 @@ def listar_backups(
 
 @router.post("", response_model=BackupFileOut)
 def crear_backup_manual(
-    data: BackupCreateIn | None = None,
+    data: BackupCreateIn,
     db: Session = Depends(get_db),
     user: Usuario = Depends(require_admin)
 ):
-    desc_val = data.description if data else None
-    backup_file = crear_backup(db, user_id=user.id, trigger="MANUAL", description=desc_val)
+    if not data or not data.description or not data.description.strip():
+        raise HTTPException(status_code=422, detail="El nombre de la copia es obligatorio")
+    backup_file = crear_backup(db, user_id=user.id, trigger="MANUAL", description=data.description.strip())
     return BackupFileOut(
         id=backup_file.id,
         filename=backup_file.filename,
@@ -523,11 +524,13 @@ def restaurar_backup_endpoint(
     db: Session = Depends(get_db),
     user: Usuario = Depends(require_admin)
 ):
+    if not data or not data.description or not data.description.strip():
+        raise HTTPException(status_code=422, detail="El nombre de la restauración es obligatorio")
     resultado = restaurar_backup_prueba(
         db=db,
         backup_id=id,
         target_db=data.target_database,
-        description=data.description,
+        description=data.description.strip(),
         user_id=user.id
     )
     return resultado

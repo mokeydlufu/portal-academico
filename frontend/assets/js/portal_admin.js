@@ -1076,7 +1076,7 @@ async function renderBackupsPanelView(container) {
           <thead class="bg-slate-50 text-slate-500 font-semibold uppercase text-[10px] border-b border-slate-200">
             <tr>
               <th class="py-2.5 px-3">Fecha</th>
-              <th class="py-2.5 px-3">Copia de Seguridad</th>
+              <th class="py-2.5 px-3">Nombre de la Copia</th>
               <th class="py-2.5 px-3">Tipo</th>
               <th class="py-2.5 px-3">Tamaño</th>
               <th class="py-2.5 px-3 text-center">Estado</th>
@@ -1156,7 +1156,7 @@ async function renderBackupsGuardadosView(container) {
           <thead class="bg-slate-50 text-slate-500 font-semibold uppercase text-[10px] border-b border-slate-200">
             <tr>
               <th class="py-2.5 px-3">Fecha Creación</th>
-              <th class="py-2.5 px-3">Copia de Seguridad</th>
+              <th class="py-2.5 px-3">Nombre de la Copia</th>
               <th class="py-2.5 px-3">Tipo</th>
               <th class="py-2.5 px-3">Tamaño</th>
               <th class="py-2.5 px-3">Generado Por</th>
@@ -1259,7 +1259,7 @@ async function renderBackupsExploradorView(container) {
         <table class="w-full text-left text-xs border-collapse" id="tablaExploradorBackups">
           <thead class="bg-slate-50 text-slate-500 font-semibold uppercase text-[10px] border-b border-slate-200">
             <tr>
-              <th class="py-2.5 px-3">Copia de Seguridad</th>
+              <th class="py-2.5 px-3">Nombre de la Copia</th>
               <th class="py-2.5 px-3">Fecha en Disco</th>
               <th class="py-2.5 px-3">Tamaño</th>
               <th class="py-2.5 px-3">Tipo</th>
@@ -1546,7 +1546,7 @@ async function renderBackupsHistorialView(container) {
               <th class="py-2.5 px-3">Fin</th>
               <th class="py-2.5 px-3">Duración</th>
               <th class="py-2.5 px-3">Tipo</th>
-              <th class="py-2.5 px-3">Copia de Seguridad</th>
+              <th class="py-2.5 px-3">Nombre de la Copia</th>
               <th class="py-2.5 px-3">Usuario / Disparador</th>
               <th class="py-2.5 px-3 text-center">Estado</th>
               <th class="py-2.5 px-3 text-right">Detalle</th>
@@ -1608,20 +1608,22 @@ async function renderBackupsRestauracionesView(container) {
             <tr>
               <th class="py-2.5 px-3">Fecha Inicio</th>
               <th class="py-2.5 px-3">Duración</th>
-              <th class="py-2.5 px-3">Copia utilizada</th>
-              <th class="py-2.5 px-3">Base restaurada de prueba</th>
+              <th class="py-2.5 px-3">Nombre de la Restauración</th>
+              <th class="py-2.5 px-3">Copia Utilizada</th>
+              <th class="py-2.5 px-3">Base de Prueba</th>
               <th class="py-2.5 px-3">Usuario</th>
               <th class="py-2.5 px-3 text-center">Estado</th>
               <th class="py-2.5 px-3 text-right">Resultado</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            ${rows.length === 0 ? '<tr><td colspan="7" class="text-center text-slate-400 py-6">No hay restauraciones registradas aún.</td></tr>' : rows.map(r => `
+            ${rows.length === 0 ? '<tr><td colspan="8" class="text-center text-slate-400 py-6">No hay restauraciones registradas aún.</td></tr>' : rows.map(r => `
               <tr class="hover:bg-slate-50 transition-colors">
                 <td class="py-2.5 px-3 font-semibold text-slate-800">${esc(r.started_at)}</td>
                 <td class="py-2.5 px-3 text-slate-600">${esc(r.duration_str || '--')}</td>
-                <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(formatNombreBackupVisible(r.filename, r.backup_description))}</td>
-                <td class="py-2.5 px-3 font-semibold text-amber-800">${esc(formatNombreRestauracionVisible(r.target_database, r.description))}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(r.description || formatNombreRestauracionVisible(r.target_database))}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-700">${esc(formatNombreBackupVisible(r.filename, r.backup_description))}</td>
+                <td class="py-2.5 px-3 font-semibold text-amber-800">${esc(formatNombreRestauracionVisible(r.target_database))}</td>
                 <td class="py-2.5 px-3 text-slate-600">${esc(r.user_name || 'Sistema')}</td>
                 <td class="py-2.5 px-3 text-center">
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold ${r.status === 'CORRECTO' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
@@ -1663,6 +1665,21 @@ function cerrarModalCrearBackup() {
 async function ejecutarCrearBackupAdmin() {
   const descInput = document.getElementById('crearBackupNombre');
   const description = descInput ? descInput.value.trim() : '';
+
+  if (!description) {
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Campo obligatorio',
+        text: 'Debe ingresar el Nombre de la copia.',
+        confirmButtonColor: '#d97706'
+      });
+    } else {
+      alert('Debe ingresar el Nombre de la copia.');
+    }
+    if (descInput) descInput.focus();
+    return;
+  }
 
   const btn = document.getElementById('btnConfirmarCrear');
   const btnCancel = document.getElementById('btnCancelarCrear');
@@ -1913,7 +1930,9 @@ async function restaurarBackupAdmin(id, filename, backupDescription = '') {
             <strong>Aislamiento de Seguridad:</strong> Está prohibido restaurar sobre la base de producción <code>portal_academico</code>.
           </div>
           <div>
-            <label class="block font-semibold text-slate-700 mb-1">Nombre descriptivo de la restauración:</label>
+            <label class="block font-semibold text-slate-700 mb-1">
+              Nombre de la restauración <span class="text-rose-500 font-bold">*</span>:
+            </label>
             <input type="text" id="swal-restore-description" placeholder="Ej: Restauración de prueba de matrículas" class="w-full border border-slate-300 rounded px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-amber-500">
           </div>
           <div>
@@ -1936,6 +1955,10 @@ async function restaurarBackupAdmin(id, filename, backupDescription = '') {
         const descVal = descInput ? descInput.value.trim() : '';
         const dbName = dbInput ? dbInput.value.trim() : '';
 
+        if (!descVal) {
+          Swal.showValidationMessage('Debe ingresar el Nombre de la restauración');
+          return false;
+        }
         if (!dbName) {
           Swal.showValidationMessage('Debe ingresar un nombre para la base de datos de prueba');
           return false;
@@ -1945,7 +1968,7 @@ async function restaurarBackupAdmin(id, filename, backupDescription = '') {
             method: 'POST',
             body: JSON.stringify({
               target_database: dbName,
-              description: descVal || null
+              description: descVal
             })
           });
           return res;
@@ -1994,15 +2017,20 @@ async function ejecutarRestaurarBackupAdmin() {
   const descEl = document.getElementById('restaurarDescripcion');
   const description = descEl ? descEl.value.trim() : '';
 
-  const btn = document.getElementById('btnConfirmarRestaurar');
-  const btnCancel = document.getElementById('btnCancelarRestaurar');
-  const loader = document.getElementById('restaurarLoader');
-  const alertEl = document.getElementById('restaurarAlert');
-
+  if (!description) {
+    alert('Debe ingresar el Nombre de la restauración.');
+    if (descEl) descEl.focus();
+    return;
+  }
   if (!targetDb) {
     alert('Ingrese un nombre para la base restaurada de prueba.');
     return;
   }
+
+  const btn = document.getElementById('btnConfirmarRestaurar');
+  const btnCancel = document.getElementById('btnCancelarRestaurar');
+  const loader = document.getElementById('restaurarLoader');
+  const alertEl = document.getElementById('restaurarAlert');
 
   btn.disabled = true;
   btnCancel.disabled = true;
@@ -2014,7 +2042,7 @@ async function ejecutarRestaurarBackupAdmin() {
       method: 'POST',
       body: JSON.stringify({
         target_database: targetDb,
-        description: description || null
+        description: description
       })
     });
 
@@ -2218,8 +2246,25 @@ async function guardarProgramacionAdmin(e) {
     }
   }
 
+  const nombreInput = document.getElementById('progNombre');
+  const nombreVal = nombreInput ? nombreInput.value.trim() : '';
+  if (!nombreVal) {
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Campo obligatorio',
+        text: 'Debe ingresar el Nombre de la programación.',
+        confirmButtonColor: '#d97706'
+      });
+    } else {
+      alert('Debe ingresar el Nombre de la programación.');
+    }
+    if (nombreInput) nombreInput.focus();
+    return;
+  }
+
   const payload = {
-    name: document.getElementById('progNombre').value.trim(),
+    name: nombreVal,
     frequency: freq,
     run_time: runTimeVal,
     interval_value: intervalVal,

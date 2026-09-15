@@ -296,9 +296,9 @@ if (!in_array($_SESSION['rol'] ?? '', ['ADMIN', 'ADMINISTRADOR'])) {
       <div class="p-5 text-xs space-y-3">
         <div id="crearBackupAlert" class="hidden"></div>
         <div>
-          <label for="crearBackupNombre" class="block font-semibold text-slate-700 mb-1">Nombre descriptivo de la copia:</label>
-          <input type="text" id="crearBackupNombre" placeholder="Ej: Backup antes de actualizar matrículas" class="w-full border border-slate-300 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-purple-500">
-          <span class="text-[10px] text-slate-500 mt-0.5 block">Identificador claro para reconocer fácilmente el propósito de este backup.</span>
+          <label for="crearBackupNombre" class="block font-semibold text-slate-700 mb-1">Nombre de la copia <span class="text-rose-500 font-bold">*</span>:</label>
+          <input type="text" id="crearBackupNombre" required placeholder="Ej: Backup antes de actualizar matrículas" class="w-full border border-slate-300 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-purple-500">
+          <span class="text-[10px] text-slate-500 mt-0.5 block">Campo obligatorio para identificar el propósito de la copia de seguridad.</span>
         </div>
         <p class="text-slate-600 leading-relaxed">
           Se generará una copia de seguridad oficial y completa de la base de datos PostgreSQL utilizando el formato binario comprimido de <code class="bg-slate-100 px-1 py-0.5 rounded text-purple-700 font-semibold">pg_dump (-F c)</code>.
@@ -392,9 +392,9 @@ if (!in_array($_SESSION['rol'] ?? '', ['ADMIN', 'ADMINISTRADOR'])) {
         </div>
 
         <div>
-          <label for="restaurarDescripcion" class="block font-semibold text-slate-700 mb-1">Nombre descriptivo de la restauración:</label>
-          <input type="text" id="restaurarDescripcion" placeholder="Ej: Restauración de prueba de matrículas" class="w-full border border-slate-300 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-amber-500">
-          <span class="text-[10px] text-slate-500 mt-0.5 block">Nombre descriptivo para registrar el motivo o referencia de esta restauración.</span>
+          <label for="restaurarDescripcion" class="block font-semibold text-slate-700 mb-1">Nombre de la restauración <span class="text-rose-500 font-bold">*</span>:</label>
+          <input type="text" id="restaurarDescripcion" required placeholder="Ej: Restauración de prueba de matrículas" class="w-full border border-slate-300 rounded px-3 py-1.5 text-xs focus:outline-none focus:border-amber-500">
+          <span class="text-[10px] text-slate-500 mt-0.5 block">Campo obligatorio para registrar la referencia de esta prueba.</span>
         </div>
 
         <div>
@@ -429,8 +429,9 @@ if (!in_array($_SESSION['rol'] ?? '', ['ADMIN', 'ADMINISTRADOR'])) {
       <form id="formProgramacion" onsubmit="guardarProgramacionAdmin(event)" class="p-5 text-xs space-y-3">
         <input type="hidden" id="progId">
         <div>
-          <label class="block font-semibold text-slate-700 mb-1">Nombre Descriptivo de la Tarea:</label>
-          <input type="text" id="progNombre" required placeholder="Ej: Copia Diaria Nocturna" class="w-full border border-slate-300 rounded px-3 py-1.5 focus:outline-none focus:border-purple-500">
+          <label for="progNombre" class="block font-semibold text-slate-700 mb-1">Nombre de la programación <span class="text-rose-500 font-bold">*</span>:</label>
+          <input type="text" id="progNombre" required placeholder="Ej: Backup Diario" class="w-full border border-slate-300 rounded px-3 py-1.5 focus:outline-none focus:border-purple-500">
+          <span class="text-[10px] text-slate-500 mt-0.5 block">Campo obligatorio para identificar la política automática.</span>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
