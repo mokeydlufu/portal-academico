@@ -1523,7 +1523,46 @@ def listar_estudiantes(db: Session = Depends(get_db), _=Depends(current_user)):
 
 @app.post("/api/estudiantes", response_model=schemas.EstudianteOut)
 def crear_estudiante(data: schemas.EstudianteCreate, db: Session = Depends(get_db), _=Depends(current_user)):
-    obj = models.Estudiante(**data.model_dump())
+    # 1. Validar duplicados de código, DNI o correo
+    existente = db.query(models.Estudiante).filter(
+        (models.Estudiante.codigo == data.codigo) |
+        (models.Estudiante.dni == data.dni) |
+        (models.Estudiante.correo == data.correo)
+    ).first()
+    if existente:
+        raise HTTPException(status_code=400, detail="Ya existe un estudiante con ese código, DNI o correo institucional")
+
+    dump_data = data.model_dump()
+    if not dump_data.get("fecha_ingreso"):
+        dump_data["fecha_ingreso"] = date.today()
+
+    # 2. Asegurar usuario de acceso con rol ESTUDIANTE y contraseña por defecto
+    user = db.query(models.Usuario).filter(models.Usuario.correo == data.correo).first()
+    if not user:
+        user = models.Usuario(
+            nombre=f"{data.nombres} {data.apellidos}",
+            correo=data.correo,
+            password_hash=pwd_context.hash("Estudiante123*"),
+            rol="ESTUDIANTE",
+            activo=(data.estado == "ACTIVO")
+        )
+        db.add(user)
+        db.flush()
+    else:
+        user.rol = "ESTUDIANTE"
+        user.activo = (data.estado == "ACTIVO")
+
+    dump_data["usuario_id"] = user.id
+
+    # 3. Vincular con carrera_id si existe
+    carrera = db.query(models.Carrera).filter(
+        (models.Carrera.nombre.ilike(f"%{data.carrera}%")) |
+        (models.Carrera.codigo.ilike(f"%{data.carrera}%"))
+    ).first()
+    if carrera:
+        dump_data["carrera_id"] = carrera.id
+
+    obj = models.Estudiante(**dump_data)
     db.add(obj)
     db.commit()
     db.refresh(obj)
@@ -1534,8 +1573,17 @@ def editar_estudiante(id: int, data: schemas.EstudianteUpdate, db: Session = Dep
     obj = db.get(models.Estudiante, id)
     if not obj:
         raise HTTPException(404, "Estudiante no encontrado")
-    for k, v in data.model_dump().items():
+    
+    update_data = data.model_dump(exclude_unset=True)
+    for k, v in update_data.items():
         setattr(obj, k, v)
+    
+    # Sincronizar estado del usuario si se actualizó
+    if "estado" in update_data and obj.usuario_id:
+        user = db.get(models.Usuario, obj.usuario_id)
+        if user:
+            user.activo = (update_data["estado"] == "ACTIVO")
+
     db.commit()
     db.refresh(obj)
     return obj
@@ -1555,6 +1603,9 @@ def listar_cursos(db: Session = Depends(get_db), _=Depends(current_user)):
 
 @app.post("/api/cursos", response_model=schemas.CursoOut)
 def crear_curso(data: schemas.CursoCreate, db: Session = Depends(get_db), _=Depends(current_user)):
+    existente = db.query(models.Curso).filter(models.Curso.codigo == data.codigo).first()
+    if existente:
+        raise HTTPException(status_code=400, detail=f"Ya existe un curso registrado con el código {data.codigo}")
     obj = models.Curso(**data.model_dump())
     db.add(obj)
     db.commit()
@@ -1566,7 +1617,7 @@ def editar_curso(id: int, data: schemas.CursoUpdate, db: Session = Depends(get_d
     obj = db.get(models.Curso, id)
     if not obj:
         raise HTTPException(404, "Curso no encontrado")
-    for k, v in data.model_dump().items():
+    for k, v in data.model_dump(exclude_unset=True).items():
         setattr(obj, k, v)
     db.commit()
     db.refresh(obj)
@@ -1597,8 +1648,39 @@ def listar_matriculas(db: Session = Depends(get_db), _=Depends(current_user)):
 
 @app.post("/api/matriculas", response_model=schemas.MatriculaOut)
 def crear_matricula(data: schemas.MatriculaCreate, db: Session = Depends(get_db), _=Depends(current_user)):
-    obj = models.Matricula(**data.model_dump())
+    # Evitar duplicados
+    existente = db.query(models.Matricula).filter(
+        models.Matricula.estudiante_id == data.estudiante_id,
+        models.Matricula.curso_id == data.curso_id,
+        models.Matricula.periodo == data.periodo
+    ).first()
+    if existente:
+        raise HTTPException(status_code=400, detail="El estudiante ya está matriculado en este curso para el periodo indicado")
+
+    dump_data = data.model_dump()
+    periodo = db.query(models.Periodo).filter(models.Periodo.codigo == data.periodo).first()
+    if periodo:
+        dump_data["periodo_id"] = periodo.id
+        seccion = db.query(models.Seccion).filter(
+            models.Seccion.curso_id == data.curso_id,
+            models.Seccion.periodo_id == periodo.id
+        ).first()
+        if seccion:
+            dump_data["seccion_id"] = seccion.id
+
+    obj = models.Matricula(**dump_data)
     db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+@app.put("/api/matriculas/{id}", response_model=schemas.MatriculaOut)
+def editar_matricula(id: int, data: schemas.MatriculaUpdate, db: Session = Depends(get_db), _=Depends(current_user)):
+    obj = db.get(models.Matricula, id)
+    if not obj:
+        raise HTTPException(404, "Matrícula no encontrada")
+    for k, v in data.model_dump(exclude_unset=True).items():
+        setattr(obj, k, v)
     db.commit()
     db.refresh(obj)
     return obj

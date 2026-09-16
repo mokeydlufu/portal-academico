@@ -114,13 +114,30 @@ class EstudianteBase(BaseModel):
     correo: EmailStr
     carrera: str
     ciclo: int
-    fecha_ingreso: date
+    fecha_ingreso: date | None = None
     estado: str = "ACTIVO"
+    telefono: str | None = None
+    direccion: str | None = None
 
 class EstudianteCreate(EstudianteBase): pass
-class EstudianteUpdate(EstudianteBase): pass
+
+class EstudianteUpdate(BaseModel):
+    codigo: str | None = None
+    nombres: str | None = None
+    apellidos: str | None = None
+    dni: str | None = None
+    correo: EmailStr | None = None
+    carrera: str | None = None
+    ciclo: int | None = None
+    fecha_ingreso: date | None = None
+    estado: str | None = None
+    telefono: str | None = None
+    direccion: str | None = None
+
 class EstudianteOut(EstudianteBase):
     id: int
+    usuario_id: int | None = None
+    carrera_id: int | None = None
     model_config = ConfigDict(from_attributes=True)
 
 class CursoBase(BaseModel):
@@ -131,7 +148,14 @@ class CursoBase(BaseModel):
     ciclo: int
 
 class CursoCreate(CursoBase): pass
-class CursoUpdate(CursoBase): pass
+
+class CursoUpdate(BaseModel):
+    codigo: str | None = None
+    nombre: str | None = None
+    creditos: int | None = None
+    docente: str | None = None
+    ciclo: int | None = None
+
 class CursoOut(CursoBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
@@ -144,7 +168,14 @@ class MatriculaBase(BaseModel):
     estado: str = "MATRICULADO"
 
 class MatriculaCreate(MatriculaBase): pass
-class MatriculaUpdate(MatriculaBase): pass
+
+class MatriculaUpdate(BaseModel):
+    estudiante_id: int | None = None
+    curso_id: int | None = None
+    periodo: str | None = None
+    nota: float | None = None
+    estado: str | None = None
+
 class MatriculaOut(MatriculaBase):
     id: int
     model_config = ConfigDict(from_attributes=True)

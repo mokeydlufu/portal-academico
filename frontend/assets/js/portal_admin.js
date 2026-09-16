@@ -575,19 +575,38 @@ async function guardarNuevoEstudiante(e) {
     nombres: document.getElementById('estNom').value.trim(),
     apellidos: document.getElementById('estApe').value.trim(),
     carrera: document.getElementById('estCar').value.trim(),
-    ciclo: parseInt(document.getElementById('estCic').value),
+    ciclo: parseInt(document.getElementById('estCic').value) || 1,
     correo: document.getElementById('estCor').value.trim(),
     telefono: document.getElementById('estTel').value.trim(),
     direccion: document.getElementById('estDir').value.trim(),
+    fecha_ingreso: new Date().toISOString().split('T')[0],
     estado: 'ACTIVO'
   };
 
   try {
     await api('/estudiantes', { method: 'POST', body: JSON.stringify(payload) });
-    alert('¡Estudiante registrado correctamente!');
+    if (typeof Swal !== 'undefined') {
+      await Swal.fire({
+        icon: 'success',
+        title: '¡Estudiante Registrado!',
+        text: 'El alumno fue registrado exitosamente y ya cuenta con acceso al portal.',
+        confirmButtonColor: '#0f172a'
+      });
+    } else {
+      alert('¡Estudiante registrado correctamente!');
+    }
     cargarModuloAdmin('estudiantes-lista');
   } catch (err) {
-    alert('Error al registrar estudiante: ' + err.message);
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error al registrar estudiante',
+        text: err.message,
+        confirmButtonColor: '#0f172a'
+      });
+    } else {
+      alert('Error al registrar estudiante: ' + err.message);
+    }
   }
 }
 
@@ -627,20 +646,157 @@ async function renderEstudiantesEstadoView(container) {
 async function verEstudianteModal(id) {
   const e = estudiantesGlobal.find(x => x.id === id);
   if (!e) return;
-  alert(`Ficha de Estudiante:\n\nCódigo: ${e.codigo}\nNombre: ${e.apellidos}, ${e.nombres}\nDNI: ${e.dni}\nCarrera: ${e.carrera}\nCiclo: ${e.ciclo}\nCorreo: ${e.correo}\nEstado: ${e.estado}`);
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({
+      title: `<span class="text-sm font-bold text-slate-800">${esc(e.apellidos)}, ${esc(e.nombres)}</span>`,
+      html: `
+        <div class="text-left text-xs space-y-2 p-3 bg-slate-50 border border-slate-200 rounded">
+          <div><strong class="text-slate-700">Código de Alumno:</strong> <span class="font-mono font-bold text-slate-900">${esc(e.codigo)}</span></div>
+          <div><strong class="text-slate-700">DNI:</strong> ${esc(e.dni)}</div>
+          <div><strong class="text-slate-700">Carrera Profesional:</strong> ${esc(e.carrera)}</div>
+          <div><strong class="text-slate-700">Ciclo Académico:</strong> Ciclo ${e.ciclo}</div>
+          <div><strong class="text-slate-700">Correo Institucional:</strong> ${esc(e.correo)}</div>
+          <div><strong class="text-slate-700">Teléfono de Contacto:</strong> ${esc(e.telefono || 'No registrado')}</div>
+          <div><strong class="text-slate-700">Dirección Registrada:</strong> ${esc(e.direccion || 'No registrada')}</div>
+          <div><strong class="text-slate-700">Condición Académica:</strong> <span class="px-2 py-0.5 rounded text-[10px] font-bold ${e.estado === 'ACTIVO' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}">${esc(e.estado)}</span></div>
+        </div>
+      `,
+      confirmButtonText: 'Cerrar Ficha',
+      confirmButtonColor: '#0f172a'
+    });
+  } else {
+    alert(`Ficha de Estudiante:\n\nCódigo: ${e.codigo}\nNombre: ${e.apellidos}, ${e.nombres}\nDNI: ${e.dni}\nCarrera: ${e.carrera}\nCiclo: ${e.ciclo}\nCorreo: ${e.correo}\nEstado: ${e.estado}`);
+  }
+}
+
+async function editarEstudianteModal(id) {
+  const e = estudiantesGlobal.find(x => x.id === id);
+  if (!e) return;
+
+  if (typeof Swal !== 'undefined') {
+    const { value: formValues } = await Swal.fire({
+      title: 'Editar Datos de Estudiante',
+      html: `
+        <div class="text-left text-xs space-y-3 p-2">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Nombres:</label>
+            <input id="swalEstNom" class="swal2-input !m-0 !w-full !text-xs !h-9" value="${esc(e.nombres)}">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Apellidos:</label>
+            <input id="swalEstApe" class="swal2-input !m-0 !w-full !text-xs !h-9" value="${esc(e.apellidos)}">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Carrera:</label>
+            <input id="swalEstCar" class="swal2-input !m-0 !w-full !text-xs !h-9" value="${esc(e.carrera)}">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Ciclo:</label>
+              <input id="swalEstCic" type="number" min="1" max="10" class="swal2-input !m-0 !w-full !text-xs !h-9" value="${e.ciclo}">
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Estado:</label>
+              <select id="swalEstEst" class="swal2-select !m-0 !w-full !text-xs !h-9">
+                <option value="ACTIVO" ${e.estado === 'ACTIVO' ? 'selected' : ''}>ACTIVO</option>
+                <option value="INACTIVO" ${e.estado !== 'ACTIVO' ? 'selected' : ''}>INACTIVO</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Teléfono:</label>
+            <input id="swalEstTel" class="swal2-input !m-0 !w-full !text-xs !h-9" value="${esc(e.telefono || '')}">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Dirección:</label>
+            <input id="swalEstDir" class="swal2-input !m-0 !w-full !text-xs !h-9" value="${esc(e.direccion || '')}">
+          </div>
+        </div>
+      `,
+      focusConfirm: false,
+      showCancelButton: true,
+      confirmButtonText: 'Guardar Cambios',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#0f172a',
+      preConfirm: () => {
+        return {
+          nombres: document.getElementById('swalEstNom').value.trim(),
+          apellidos: document.getElementById('swalEstApe').value.trim(),
+          carrera: document.getElementById('swalEstCar').value.trim(),
+          ciclo: parseInt(document.getElementById('swalEstCic').value) || e.ciclo,
+          estado: document.getElementById('swalEstEst').value,
+          telefono: document.getElementById('swalEstTel').value.trim(),
+          direccion: document.getElementById('swalEstDir').value.trim()
+        };
+      }
+    });
+
+    if (formValues) {
+      try {
+        await api(`/estudiantes/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(formValues)
+        });
+        await Swal.fire({
+          icon: 'success',
+          title: '¡Actualizado!',
+          text: 'Datos del estudiante guardados con éxito.',
+          timer: 1500,
+          showConfirmButton: false
+        });
+        cargarModuloAdmin('estudiantes-lista');
+      } catch (err) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error al actualizar',
+          text: err.message,
+          confirmButtonColor: '#0f172a'
+        });
+      }
+    }
+  }
 }
 
 async function toggleEstadoEstudiante(id, estadoActual) {
   const nuevo = estadoActual === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
-  if (confirm(`¿Desea cambiar el estado del estudiante a ${nuevo}?`)) {
+  let confirmar = false;
+  if (typeof Swal !== 'undefined') {
+    const res = await Swal.fire({
+      title: '¿Cambiar estado?',
+      text: `¿Desea cambiar el estado del estudiante a ${nuevo}?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, cambiar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#0f172a'
+    });
+    confirmar = res.isConfirmed;
+  } else {
+    confirmar = confirm(`¿Desea cambiar el estado del estudiante a ${nuevo}?`);
+  }
+
+  if (confirmar) {
     try {
       await api(`/estudiantes/${id}`, {
         method: 'PUT',
         body: JSON.stringify({ estado: nuevo })
       });
+      if (typeof Swal !== 'undefined') {
+        await Swal.fire({
+          icon: 'success',
+          title: 'Estado Actualizado',
+          text: `El estudiante ahora se encuentra en estado ${nuevo}.`,
+          timer: 1500,
+          showConfirmButton: false
+        });
+      }
       cargarModuloAdmin('estudiantes-lista');
     } catch (err) {
-      alert('Error: ' + err.message);
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message, confirmButtonColor: '#0f172a' });
+      } else {
+        alert('Error: ' + err.message);
+      }
     }
   }
 }
@@ -762,20 +918,62 @@ async function guardarNuevoCurso(e) {
   };
   try {
     await api('/cursos', { method: 'POST', body: JSON.stringify(payload) });
-    alert('¡Curso registrado con éxito!');
+    if (typeof Swal !== 'undefined') {
+      await Swal.fire({
+        icon: 'success',
+        title: '¡Curso Registrado!',
+        text: 'La asignatura fue agregada exitosamente.',
+        timer: 1500,
+        showConfirmButton: false
+      });
+    } else {
+      alert('¡Curso registrado con éxito!');
+    }
     cargarModuloAdmin('cursos-lista');
   } catch (err) {
-    alert('Error al guardar curso: ' + err.message);
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({ icon: 'error', title: 'Error al registrar curso', text: err.message, confirmButtonColor: '#0f172a' });
+    } else {
+      alert('Error al guardar curso: ' + err.message);
+    }
   }
 }
 
 async function eliminarCursoConfirm(id, nombre) {
-  if (confirm(`¿Desea eliminar la asignatura "${nombre}"?`)) {
+  let confirmar = false;
+  if (typeof Swal !== 'undefined') {
+    const res = await Swal.fire({
+      title: '¿Eliminar asignatura?',
+      text: `¿Está seguro de eliminar el curso "${nombre}"? Esta acción no se puede deshacer.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#e11d48'
+    });
+    confirmar = res.isConfirmed;
+  } else {
+    confirmar = confirm(`¿Desea eliminar la asignatura "${nombre}"?`);
+  }
+
+  if (confirmar) {
     try {
       await api(`/cursos/${id}`, { method: 'DELETE' });
+      if (typeof Swal !== 'undefined') {
+        await Swal.fire({
+          icon: 'success',
+          title: 'Asignatura eliminada',
+          timer: 1500,
+          showConfirmButton: false
+        });
+      }
       cargarModuloAdmin('cursos-lista');
     } catch (err) {
-      alert('Error: ' + err.message);
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({ icon: 'error', title: 'Error al eliminar', text: err.message, confirmButtonColor: '#0f172a' });
+      } else {
+        alert('Error: ' + err.message);
+      }
     }
   }
 }
@@ -895,20 +1093,62 @@ async function guardarNuevaMatricula(e) {
   };
   try {
     await api('/matriculas', { method: 'POST', body: JSON.stringify(payload) });
-    alert('¡Matrícula registrada correctamente!');
+    if (typeof Swal !== 'undefined') {
+      await Swal.fire({
+        icon: 'success',
+        title: '¡Matrícula Confirmada!',
+        text: 'El alumno fue matriculado correctamente en la asignatura.',
+        timer: 1500,
+        showConfirmButton: false
+      });
+    } else {
+      alert('¡Matrícula registrada correctamente!');
+    }
     cargarModuloAdmin('matriculas-lista');
   } catch (err) {
-    alert('Error al registrar matrícula: ' + err.message);
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({ icon: 'error', title: 'Error en matrícula', text: err.message, confirmButtonColor: '#0f172a' });
+    } else {
+      alert('Error al registrar matrícula: ' + err.message);
+    }
   }
 }
 
 async function eliminarMatriculaConfirm(id) {
-  if (confirm('¿Desea dar de baja esta matrícula?')) {
+  let confirmar = false;
+  if (typeof Swal !== 'undefined') {
+    const res = await Swal.fire({
+      title: '¿Dar de baja matrícula?',
+      text: '¿Desea eliminar este registro de matrícula?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, dar de baja',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#e11d48'
+    });
+    confirmar = res.isConfirmed;
+  } else {
+    confirmar = confirm('¿Desea dar de baja esta matrícula?');
+  }
+
+  if (confirmar) {
     try {
       await api(`/matriculas/${id}`, { method: 'DELETE' });
+      if (typeof Swal !== 'undefined') {
+        await Swal.fire({
+          icon: 'success',
+          title: 'Matrícula eliminada',
+          timer: 1500,
+          showConfirmButton: false
+        });
+      }
       cargarModuloAdmin('matriculas-lista');
     } catch (err) {
-      alert('Error: ' + err.message);
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message, confirmButtonColor: '#0f172a' });
+      } else {
+        alert('Error: ' + err.message);
+      }
     }
   }
 }
