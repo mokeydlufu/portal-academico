@@ -325,11 +325,27 @@ def listar_restauraciones(
     db: Session = Depends(get_db),
     user: Usuario = Depends(require_admin_or_supervisor)
 ):
+    import re
     rows = db.query(RestoreHistory).order_by(desc(RestoreHistory.started_at)).limit(100).all()
     resultado = []
     for r in rows:
         fn = r.backup_file.filename if r.backup_file else None
         b_desc = r.backup_file.description if r.backup_file else None
+        t_count, e_count, m_count = None, None, None
+        if r.message:
+            mt = re.search(r"Tablas:\s*(\d+)", r.message)
+            if mt:
+                t_count = int(mt.group(1))
+            me = re.search(r"Estudiantes:\s*(\d+)", r.message)
+            if me:
+                e_count = int(me.group(1))
+            mm = re.search(r"Matrículas:\s*(\d+)", r.message)
+            if mm:
+                m_count = int(mm.group(1))
+            if t_count is None:
+                mt_leg = re.search(r"Tablas restauradas:\s*(\d+)", r.message)
+                if mt_leg:
+                    t_count = int(mt_leg.group(1))
         resultado.append(RestoreHistoryOut(
             id=r.id,
             backup_file_id=r.backup_file_id,
@@ -342,9 +358,57 @@ def listar_restauraciones(
             duration_str=format_duration(r.started_at, r.finished_at),
             status=r.status,
             message=r.message,
-            user_name=r.usuario.nombre if r.usuario else "Sistema"
+            user_name=r.usuario.nombre if r.usuario else "Sistema",
+            table_count=t_count,
+            estudiantes_count=e_count,
+            matriculas_count=m_count
         ))
     return resultado
+
+@router.get("/restores/{id}", response_model=RestoreHistoryOut)
+def ver_detalle_restauracion_endpoint(
+    id: int,
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(require_admin_or_supervisor)
+):
+    import re
+    r = db.get(RestoreHistory, id)
+    if not r:
+        raise HTTPException(404, "Restauración no encontrada")
+    fn = r.backup_file.filename if r.backup_file else None
+    b_desc = r.backup_file.description if r.backup_file else None
+    t_count, e_count, m_count = None, None, None
+    if r.message:
+        mt = re.search(r"Tablas:\s*(\d+)", r.message)
+        if mt:
+            t_count = int(mt.group(1))
+        me = re.search(r"Estudiantes:\s*(\d+)", r.message)
+        if me:
+            e_count = int(me.group(1))
+        mm = re.search(r"Matrículas:\s*(\d+)", r.message)
+        if mm:
+            m_count = int(mm.group(1))
+        if t_count is None:
+            mt_leg = re.search(r"Tablas restauradas:\s*(\d+)", r.message)
+            if mt_leg:
+                t_count = int(mt_leg.group(1))
+    return RestoreHistoryOut(
+        id=r.id,
+        backup_file_id=r.backup_file_id,
+        filename=fn,
+        target_database=r.target_database,
+        description=r.description,
+        backup_description=b_desc,
+        started_at=format_dt(r.started_at) or "",
+        finished_at=format_dt(r.finished_at),
+        duration_str=format_duration(r.started_at, r.finished_at),
+        status=r.status,
+        message=r.message,
+        user_name=r.usuario.nombre if r.usuario else "Sistema",
+        table_count=t_count,
+        estudiantes_count=e_count,
+        matriculas_count=m_count
+    )
 
 # ==================== 3.1. RECUPERACIÓN SELECTIVA DE DATOS DESDE BASE RESTAURADA ====================
 
@@ -562,7 +626,8 @@ def restaurar_backup_endpoint(
         backup_id=id,
         target_db=data.target_database,
         description=data.description.strip(),
-        user_id=user.id
+        user_id=user.id,
+        overwrite_existing=data.overwrite_existing
     )
     return resultado
 

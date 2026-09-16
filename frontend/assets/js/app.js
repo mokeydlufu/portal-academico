@@ -15,11 +15,14 @@ async function api(path, options={}) {
     return;
   }
   if (!res.ok) {
-    let msg = '';
+    let errData = null;
     try {
       const errJson = await res.json();
+      errData = errJson;
       if (typeof errJson.detail === 'string') {
         msg = errJson.detail;
+      } else if (errJson.detail && typeof errJson.detail === 'object' && !Array.isArray(errJson.detail)) {
+        msg = errJson.detail.message || errJson.detail.msg || JSON.stringify(errJson.detail);
       } else if (Array.isArray(errJson.detail)) {
         msg = errJson.detail.map(d => d.msg || d.message || JSON.stringify(d)).join(' | ');
       } else if (errJson.message) {
@@ -32,6 +35,7 @@ async function api(path, options={}) {
     }
     const err = new Error(msg || `Error de servidor (HTTP ${res.status})`);
     err.status = res.status;
+    err.data = errData;
     throw err;
   }
   return res.status === 204 ? null : res.json();

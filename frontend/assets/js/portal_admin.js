@@ -1861,9 +1861,9 @@ async function renderBackupsRestauracionesView(container) {
               <tr class="hover:bg-slate-50 transition-colors">
                 <td class="py-2.5 px-3 font-semibold text-slate-800">${esc(r.started_at)}</td>
                 <td class="py-2.5 px-3 text-slate-600">${esc(r.duration_str || '--')}</td>
-                <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(r.description || formatNombreRestauracionVisible(r.target_database))}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(r.description || ('Restauración #' + r.id))}</td>
                 <td class="py-2.5 px-3 font-semibold text-slate-700">${esc(formatNombreBackupVisible(r.filename, r.backup_description))}</td>
-                <td class="py-2.5 px-3 font-semibold text-amber-800">${esc(formatNombreRestauracionVisible(r.target_database))}</td>
+                <td class="py-2.5 px-3 font-mono font-bold text-purple-800">${esc(r.target_database)}</td>
                 <td class="py-2.5 px-3 text-slate-600">${esc(r.user_name || 'Sistema')}</td>
                 <td class="py-2.5 px-3 text-center">
                   <span class="px-2 py-0.5 rounded text-[10px] font-bold ${r.status === 'CORRECTO' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
@@ -2172,7 +2172,7 @@ async function restaurarBackupAdmin(id, filename, backupDescription = '') {
           <p>Se restaurará la copia <strong>${esc(nombreBackupVis)}</strong> ejecutando <code>pg_restore</code> en una base de datos de prueba aislada para verificar tablas e índices.</p>
           <div class="p-2.5 bg-amber-50 border border-amber-200 rounded text-amber-900 text-[11px] leading-relaxed">
             <i class="fa fa-shield-halved text-amber-600 mr-1"></i>
-            <strong>Aislamiento de Seguridad:</strong> Está prohibido restaurar sobre la base de producción <code>portal_academico</code>.
+            <strong>Aislamiento de Seguridad:</strong> Está terminantemente prohibido restaurar sobre la base de producción <code>portal_academico</code>.
           </div>
           <div>
             <label class="block font-semibold text-slate-700 mb-1">
@@ -2181,8 +2181,11 @@ async function restaurarBackupAdmin(id, filename, backupDescription = '') {
             <input type="text" id="swal-restore-description" placeholder="Ej: Restauración de prueba de matrículas" class="w-full border border-slate-300 rounded px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-amber-500">
           </div>
           <div>
-            <label class="block font-semibold text-slate-700 mb-1">Base restaurada de prueba:</label>
+            <label class="block font-semibold text-slate-700 mb-1">
+              Base restaurada de prueba <span class="text-rose-500 font-bold">*</span>:
+            </label>
             <input type="text" id="swal-restore-targetdb" value="portal_academico_restaurado_prueba" class="w-full border border-slate-300 rounded px-3 py-1.5 font-mono text-xs text-slate-800 focus:outline-none focus:border-amber-500">
+            <span class="text-[10px] text-slate-400 mt-0.5 block">Nombre exacto que usará PostgreSQL (ej: portal_academico_restaurado_diego).</span>
           </div>
         </div>
       `,
@@ -2198,7 +2201,7 @@ async function restaurarBackupAdmin(id, filename, backupDescription = '') {
         const descInput = document.getElementById('swal-restore-description');
         const dbInput = document.getElementById('swal-restore-targetdb');
         const descVal = descInput ? descInput.value.trim() : '';
-        const dbName = dbInput ? dbInput.value.trim() : '';
+        const dbName = dbInput ? dbInput.value.trim().toLowerCase() : '';
 
         if (!descVal) {
           Swal.showValidationMessage('Debe ingresar el Nombre de la restauración');
@@ -2213,11 +2216,24 @@ async function restaurarBackupAdmin(id, filename, backupDescription = '') {
             method: 'POST',
             body: JSON.stringify({
               target_database: dbName,
-              description: descVal
+              description: descVal,
+              overwrite_existing: false
             })
           });
-          return res;
+          return { ok: true, res: res, targetDb: dbName, description: descVal };
         } catch (err) {
+          const errDetail = (err.data && err.data.detail && typeof err.data.detail === 'object') ? err.data.detail : (err.data || {});
+          if (err.status === 409 || errDetail.code === 'DATABASE_EXISTS') {
+            return {
+              conflict: true,
+              backupId: id,
+              existingDb: errDetail.target_database || dbName,
+              suggestedDb: errDetail.suggested_database || `${dbName}_2`,
+              description: descVal,
+              filename: filename,
+              backupDescription: backupDescription
+            };
+          }
           Swal.showValidationMessage(err.message || 'Error al restaurar');
           return false;
         }
@@ -2226,34 +2242,139 @@ async function restaurarBackupAdmin(id, filename, backupDescription = '') {
     });
 
     if (formValues) {
-      const swalRes = await Swal.fire({
-        icon: 'success',
-        title: '¡Restauración Verificada como CORRECTA!',
-        html: `
-          <p class="text-xs text-slate-700 mb-2">${esc(formValues.message || 'La base de prueba fue creada y restaurada exitosamente.')}</p>
-          <div class="p-2.5 bg-emerald-50 rounded text-emerald-800 text-xs border border-emerald-200 text-left mb-1">
-            <div><i class="fa fa-circle-check text-emerald-600 mr-1"></i> Estado verificado: <strong>CORRECTO</strong></div>
-            <div><i class="fa fa-database text-amber-600 mr-1"></i> Base de prueba: <strong>${esc(formValues.target_database || 'portal_academico_restaurado_prueba')}</strong></div>
-          </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: '<i class="fa fa-file-import mr-1"></i> Recuperar datos',
-        cancelButtonText: 'Cerrar',
-        confirmButtonColor: '#7c3aed',
-        cancelButtonColor: '#64748b'
-      });
-      cargarModuloAdmin('backups-restauraciones');
-
-      if (swalRes.isConfirmed) {
-        const restores = await api('/backups/restores');
-        const latest = (restores || []).find(x => x.target_database === formValues.target_database) || (restores || [])[0];
-        if (latest) {
-          abrirRecuperarDatosAdmin(latest.id, latest.target_database, latest.description);
-        }
+      if (formValues.conflict) {
+        await resolverConflictoBaseExistente(formValues);
+        return;
+      }
+      if (formValues.res) {
+        await mostrarExitoRestauracion(formValues.res, formValues.targetDb, formValues.description);
       }
     }
   } else {
     abrirModalRestaurarAdmin(id, filename, backupDescription);
+  }
+}
+
+async function resolverConflictoBaseExistente(conf) {
+  const { backupId, existingDb, suggestedDb, description, filename, backupDescription } = conf;
+
+  const decision = await Swal.fire({
+    title: '<span class="text-base font-bold text-slate-900 flex items-center justify-center gap-2"><i class="fa fa-triangle-exclamation text-amber-500"></i> La base de prueba ya existe</span>',
+    html: `
+      <div class="text-left text-xs text-slate-600 space-y-2.5 mt-2">
+        <p>La base de datos <strong><code>${esc(existingDb)}</code></strong> ya existe actualmente en el servidor PostgreSQL.</p>
+        <div class="p-2.5 bg-amber-50 border border-amber-200 rounded text-amber-900 text-[11px] leading-relaxed">
+          <i class="fa fa-shield-halved text-amber-600 mr-1"></i>
+          <strong>Protección Garantizada:</strong> La base principal <code>portal_academico</code> nunca será eliminada ni sobrescrita.
+        </div>
+        <p class="text-slate-800 font-semibold">¿Qué desea hacer?</p>
+      </div>
+    `,
+    icon: 'warning',
+    showCancelButton: true,
+    showDenyButton: true,
+    confirmButtonText: `<i class="fa fa-sparkles mr-1"></i> Usar nueva: ${esc(suggestedDb)}`,
+    denyButtonText: `<i class="fa fa-rotate mr-1"></i> Reemplazar base anterior`,
+    cancelButtonText: 'Cancelar',
+    confirmButtonColor: '#7c3aed',
+    denyButtonColor: '#e11d48',
+    cancelButtonColor: '#64748b',
+    reverseButtons: false
+  });
+
+  if (decision.isConfirmed) {
+    await ejecutarRestauracionDirecta(backupId, suggestedDb, description, false);
+  } else if (decision.isDenied) {
+    const confElim = await Swal.fire({
+      title: '¿Reemplazar base de prueba anterior?',
+      html: `
+        <p class="text-xs text-slate-600 mb-2">Se eliminará ÚNICAMENTE la base de prueba anterior <strong><code>${esc(existingDb)}</code></strong> y se recreará vacía para restaurar los datos de esta copia.</p>
+        <p class="text-[11px] text-rose-700 font-semibold bg-rose-50 border border-rose-200 p-2 rounded">La base de producción portal_academico permanecerá completamente intacta.</p>
+      `,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '<i class="fa fa-check mr-1"></i> Sí, reemplazar base de prueba',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#e11d48',
+      cancelButtonColor: '#64748b'
+    });
+    if (confElim.isConfirmed) {
+      await ejecutarRestauracionDirecta(backupId, existingDb, description, true);
+    }
+  }
+}
+
+async function ejecutarRestauracionDirecta(backupId, targetDb, description, overwriteExisting) {
+  try {
+    Swal.fire({
+      title: 'Restaurando base de prueba...',
+      html: `<p class="text-xs text-slate-600">Creando base de prueba <strong><code>${esc(targetDb)}</code></strong> y ejecutando pg_restore de forma aislada...</p>`,
+      allowOutsideClick: false,
+      didOpen: () => { Swal.showLoading(); }
+    });
+
+    const res = await api(`/backups/${backupId}/restore`, {
+      method: 'POST',
+      body: JSON.stringify({
+        target_database: targetDb,
+        description: description,
+        overwrite_existing: overwriteExisting
+      })
+    });
+
+    await mostrarExitoRestauracion(res, targetDb, description);
+  } catch (err) {
+    const errDetail = (err.data && err.data.detail && typeof err.data.detail === 'object') ? err.data.detail : (err.data || {});
+    if (err.status === 409 || errDetail.code === 'DATABASE_EXISTS') {
+      await resolverConflictoBaseExistente({
+        backupId,
+        existingDb: errDetail.target_database || targetDb,
+        suggestedDb: errDetail.suggested_database || `${targetDb}_2`,
+        description,
+        filename: '',
+        backupDescription: ''
+      });
+      return;
+    }
+    Swal.fire({
+      icon: 'error',
+      title: 'Error al restaurar',
+      text: err.message || 'Ocurrió un error al procesar la restauración.',
+      confirmButtonColor: '#e11d48'
+    });
+  }
+}
+
+async function mostrarExitoRestauracion(res, targetDb, description) {
+  cargarModuloAdmin('backups-restauraciones');
+
+  const swalRes = await Swal.fire({
+    icon: 'success',
+    title: '¡Restauración Verificada como CORRECTA!',
+    html: `
+      <p class="text-xs text-slate-700 mb-2.5">${esc(res.message || 'La base de prueba fue creada y restaurada exitosamente.')}</p>
+      <div class="p-3 bg-emerald-50 rounded-lg text-emerald-900 text-xs border border-emerald-200 text-left space-y-1.5 mb-2">
+        <div><i class="fa fa-circle-check text-emerald-600 mr-1.5"></i> <strong>Estado verificado:</strong> <span class="font-bold text-emerald-700">CORRECTO</span></div>
+        <div><i class="fa fa-database text-purple-600 mr-1.5"></i> <strong>Base restaurada de prueba:</strong> <span class="font-mono font-bold text-purple-900">${esc(res.target_database || targetDb)}</span></div>
+        <div><i class="fa fa-table text-slate-600 mr-1.5"></i> <strong>Tablas restauradas:</strong> <span class="font-bold text-slate-800">${res.table_count ?? '--'}</span></div>
+        <div><i class="fa fa-user-graduate text-slate-600 mr-1.5"></i> <strong>Cantidad de estudiantes:</strong> <span class="font-bold text-slate-800">${res.estudiantes_count ?? '--'}</span></div>
+        <div><i class="fa fa-address-card text-slate-600 mr-1.5"></i> <strong>Cantidad de matrículas:</strong> <span class="font-bold text-slate-800">${res.matriculas_count ?? '--'}</span></div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: '<i class="fa fa-file-import mr-1"></i> Recuperar datos',
+    cancelButtonText: 'Cerrar',
+    confirmButtonColor: '#7c3aed',
+    cancelButtonColor: '#64748b'
+  });
+
+  if (swalRes.isConfirmed) {
+    const restores = await api('/backups/restores');
+    const targetName = res.target_database || targetDb;
+    const latest = (restores || []).find(x => x.target_database === targetName) || (restores || [])[0];
+    if (latest) {
+      abrirRecuperarDatosAdmin(latest.id, latest.target_database, latest.description);
+    }
   }
 }
 
@@ -2276,7 +2397,7 @@ function cerrarModalRestaurarAdmin() {
 
 async function ejecutarRestaurarBackupAdmin() {
   const id = document.getElementById('restaurarBackupId').value;
-  const targetDb = document.getElementById('restaurarTargetDb').value.trim();
+  const targetDb = document.getElementById('restaurarTargetDb').value.trim().toLowerCase();
   const descEl = document.getElementById('restaurarDescripcion');
   const description = descEl ? descEl.value.trim() : '';
 
@@ -2290,67 +2411,8 @@ async function ejecutarRestaurarBackupAdmin() {
     return;
   }
 
-  const btn = document.getElementById('btnConfirmarRestaurar');
-  const btnCancel = document.getElementById('btnCancelarRestaurar');
-  const loader = document.getElementById('restaurarLoader');
-  const alertEl = document.getElementById('restaurarAlert');
-
-  btn.disabled = true;
-  btnCancel.disabled = true;
-  loader.classList.remove('hidden');
-  alertEl.classList.add('hidden');
-
-  try {
-    const res = await api(`/backups/${id}/restore`, {
-      method: 'POST',
-      body: JSON.stringify({
-        target_database: targetDb,
-        description: description
-      })
-    });
-
-    loader.classList.add('hidden');
-    alertEl.className = 'bg-emerald-50 border border-emerald-200 text-emerald-800 rounded p-3 text-xs mb-3';
-    alertEl.innerHTML = `<i class="fa fa-check-circle"></i> <strong>¡Restauración completada!</strong> ${esc(res.message)}`;
-    alertEl.classList.remove('hidden');
-
-    setTimeout(async () => {
-      cerrarModalRestaurarAdmin();
-      cargarModuloAdmin('backups-restauraciones');
-      if (typeof Swal !== 'undefined') {
-        const swalRes = await Swal.fire({
-          icon: 'success',
-          title: '¡Restauración Verificada como CORRECTA!',
-          html: `
-            <p class="text-xs text-slate-700 mb-2">${esc(res.message || 'La base de prueba fue creada y restaurada exitosamente.')}</p>
-            <div class="p-2.5 bg-emerald-50 rounded text-emerald-800 text-xs border border-emerald-200 text-left mb-1">
-              <div><i class="fa fa-circle-check text-emerald-600 mr-1"></i> Estado verificado: <strong>CORRECTO</strong></div>
-              <div><i class="fa fa-database text-amber-600 mr-1"></i> Base de prueba: <strong>${esc(targetDb)}</strong></div>
-            </div>
-          `,
-          showCancelButton: true,
-          confirmButtonText: '<i class="fa fa-file-import mr-1"></i> Recuperar datos',
-          cancelButtonText: 'Cerrar',
-          confirmButtonColor: '#7c3aed',
-          cancelButtonColor: '#64748b'
-        });
-        if (swalRes.isConfirmed) {
-          const restores = await api('/backups/restores');
-          const latest = (restores || []).find(x => x.target_database === targetDb) || (restores || [])[0];
-          if (latest) {
-            abrirRecuperarDatosAdmin(latest.id, latest.target_database, latest.description);
-          }
-        }
-      }
-    }, 1200);
-  } catch (err) {
-    loader.classList.add('hidden');
-    btn.disabled = false;
-    btnCancel.disabled = false;
-    alertEl.className = 'bg-rose-50 border border-rose-200 text-rose-800 rounded p-3 text-xs mb-3';
-    alertEl.innerHTML = `<i class="fa fa-triangle-exclamation"></i> <strong>Error al restaurar:</strong> ${esc(err.message)}`;
-    alertEl.classList.remove('hidden');
-  }
+  cerrarModalRestaurarAdmin();
+  await ejecutarRestauracionDirecta(id, targetDb, description, false);
 }
 
 async function eliminarBackupAdmin(id, filename, description = '') {
@@ -2915,74 +2977,103 @@ function verHistorialDetalleAdmin(id) {
   }
 }
 
-function verRestauracionDetalleAdmin(id) {
-  const r = (restauracionesGlobal || []).find(x => x.id === id);
-  if (!r) {
-    if (typeof Swal !== 'undefined') {
-      Swal.fire({ icon: 'warning', title: 'Registro no encontrado', confirmButtonColor: '#e11d48' });
-    } else {
-      alert('Registro no encontrado');
+async function verRestauracionDetalleAdmin(id) {
+  try {
+    let r = (restauracionesGlobal || []).find(x => x.id === id);
+    try {
+      const fresh = await api(`/backups/restores/${id}`);
+      if (fresh) r = fresh;
+    } catch {
+      // Usar caché si la llamada individual falla
     }
-    return;
-  }
 
-  if (typeof Swal !== 'undefined') {
-    Swal.fire({
-      title: '<span class="text-base font-bold text-slate-900 flex items-center justify-center gap-2"><i class="fa fa-rotate-left text-amber-600"></i> Detalle de Restauración</span>',
-      html: `
-        <div class="text-left text-xs text-slate-700 mt-2">
-          <table class="w-full border-collapse border border-slate-200 rounded overflow-hidden shadow-2xs">
-            <tbody>
-              <tr class="border-b border-slate-200 bg-slate-50">
-                <td class="py-2.5 px-3 font-semibold text-slate-600 w-1/3">Nombre descriptivo</td>
-                <td class="py-2.5 px-3 font-bold text-amber-800">${esc(r.description || '--')}</td>
-              </tr>
-              <tr class="border-b border-slate-200">
-                <td class="py-2.5 px-3 font-semibold text-slate-600">Copia utilizada</td>
-                <td class="py-2.5 px-3 font-semibold text-slate-900 break-all">${esc(formatNombreBackupVisible(r.filename, r.backup_description) || 'N/A')}</td>
-              </tr>
-              <tr class="border-b border-slate-200 bg-slate-50">
-                <td class="py-2 px-3 font-semibold text-slate-600">Base restaurada de prueba</td>
-                <td class="py-2 px-3 font-semibold text-amber-800">${esc(formatNombreRestauracionVisible(r.target_database, r.description))}</td>
-              </tr>
-              <tr class="border-b border-slate-200">
-                <td class="py-2 px-3 font-semibold text-slate-600">Fecha</td>
-                <td class="py-2 px-3 font-mono text-slate-800">${esc(r.started_at || '--')}</td>
-              </tr>
-              <tr class="border-b border-slate-200 bg-slate-50">
-                <td class="py-2 px-3 font-semibold text-slate-600">Duración</td>
-                <td class="py-2 px-3 font-semibold text-purple-700">${esc(r.duration_str || '--')}</td>
-              </tr>
-              <tr class="border-b border-slate-200">
-                <td class="py-2 px-3 font-semibold text-slate-600">Estado</td>
-                <td class="py-2 px-3">
-                  <span class="px-2 py-0.5 rounded text-[10px] font-bold ${r.status === 'CORRECTO' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
-                    ${esc(r.status)}
-                  </span>
-                </td>
-              </tr>
-              <tr>
-                <td class="py-2.5 px-3 font-semibold text-slate-600">Mensaje</td>
-                <td class="py-2.5 px-3 text-slate-700 break-words leading-relaxed">${esc(r.message || 'Sin observaciones.')}</td>
-              </tr>
-            </tbody>
-          </table>
-          ${r.status === 'CORRECTO' ? `
-            <div class="mt-3 pt-2.5 border-t border-slate-200 flex justify-end">
-              <button onclick="Swal.close(); abrirRecuperarDatosAdmin(${r.id}, '${esc(r.target_database)}', '${esc(r.description || '')}')" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-1.5 rounded font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors">
-                <i class="fa fa-file-import"></i> Recuperar datos a base principal
-              </button>
-            </div>
-          ` : ''}
-        </div>
-      `,
-      showCloseButton: true,
-      showConfirmButton: true,
-      confirmButtonText: 'Cerrar',
-      confirmButtonColor: '#0f172a'
-    });
-  } else {
-    alert(`Restauración #${r.id}\nCopia utilizada: ${formatNombreBackupVisible(r.filename)}\nBase restaurada de prueba: ${formatNombreRestauracionVisible(r.target_database)}\nFecha: ${r.started_at}\nDuración: ${r.duration_str}\nEstado: ${r.status}\nMensaje: ${r.message}`);
+    if (!r) {
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({ icon: 'warning', title: 'Registro no encontrado', confirmButtonColor: '#e11d48' });
+      } else {
+        alert('Registro no encontrado');
+      }
+      return;
+    }
+
+    const nombreRest = r.description || ('Restauración #' + r.id);
+    const copiaUsada = formatNombreBackupVisible(r.filename, r.backup_description) || 'N/A';
+    const baseRest = r.target_database || '--';
+    const tablasRecup = (r.table_count !== null && r.table_count !== undefined) ? r.table_count : '--';
+    const cantEstudiantes = (r.estudiantes_count !== null && r.estudiantes_count !== undefined) ? r.estudiantes_count : '--';
+    const cantMatriculas = (r.matriculas_count !== null && r.matriculas_count !== undefined) ? r.matriculas_count : '--';
+    const estadoBadge = r.status === 'CORRECTO'
+      ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">CORRECTO</span>'
+      : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">${esc(r.status)}</span>`;
+
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        title: '<span class="text-base font-bold text-slate-900 flex items-center justify-center gap-2"><i class="fa fa-rotate-left text-amber-600"></i> Detalle de Restauración</span>',
+        html: `
+          <div class="text-left text-xs text-slate-700 mt-2">
+            <table class="w-full border-collapse border border-slate-200 rounded overflow-hidden shadow-2xs">
+              <tbody>
+                <tr class="border-b border-slate-200 bg-slate-50">
+                  <td class="py-2.5 px-3 font-semibold text-slate-600 w-2/5">Nombre de restauración</td>
+                  <td class="py-2.5 px-3 font-bold text-slate-900">${esc(nombreRest)}</td>
+                </tr>
+                <tr class="border-b border-slate-200">
+                  <td class="py-2.5 px-3 font-semibold text-slate-600">Copia utilizada</td>
+                  <td class="py-2.5 px-3 font-semibold text-slate-800 break-all">${esc(copiaUsada)}</td>
+                </tr>
+                <tr class="border-b border-slate-200 bg-slate-50">
+                  <td class="py-2 px-3 font-semibold text-slate-600">Base restaurada</td>
+                  <td class="py-2 px-3 font-mono font-bold text-purple-800">${esc(baseRest)}</td>
+                </tr>
+                <tr class="border-b border-slate-200">
+                  <td class="py-2 px-3 font-semibold text-slate-600">Tablas recuperadas</td>
+                  <td class="py-2 px-3 font-semibold text-slate-800">${esc(tablasRecup)}</td>
+                </tr>
+                <tr class="border-b border-slate-200 bg-slate-50">
+                  <td class="py-2 px-3 font-semibold text-slate-600">Cantidad de estudiantes</td>
+                  <td class="py-2 px-3 font-semibold text-slate-800">${esc(cantEstudiantes)}</td>
+                </tr>
+                <tr class="border-b border-slate-200">
+                  <td class="py-2 px-3 font-semibold text-slate-600">Cantidad de matrículas</td>
+                  <td class="py-2 px-3 font-semibold text-slate-800">${esc(cantMatriculas)}</td>
+                </tr>
+                <tr class="border-b border-slate-200 bg-slate-50">
+                  <td class="py-2 px-3 font-semibold text-slate-600">Estado</td>
+                  <td class="py-2 px-3">${estadoBadge}</td>
+                </tr>
+                <tr class="border-b border-slate-200">
+                  <td class="py-2 px-3 font-semibold text-slate-600">Duración</td>
+                  <td class="py-2 px-3 font-semibold text-purple-700">${esc(r.duration_str || '--')}</td>
+                </tr>
+                <tr>
+                  <td class="py-2.5 px-3 font-semibold text-slate-600">Observaciones</td>
+                  <td class="py-2.5 px-3 text-slate-600 break-words leading-relaxed">${esc(r.message || 'Sin observaciones.')}</td>
+                </tr>
+              </tbody>
+            </table>
+            ${r.status === 'CORRECTO' ? `
+              <div class="mt-3 pt-2.5 border-t border-slate-200 flex justify-end">
+                <button onclick="Swal.close(); abrirRecuperarDatosAdmin(${r.id}, '${esc(r.target_database)}', '${esc(r.description || '')}')" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-1.5 rounded font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors">
+                  <i class="fa fa-file-import"></i> Comprobar y Recuperar datos
+                </button>
+              </div>
+            ` : ''}
+          </div>
+        `,
+        showCloseButton: true,
+        showConfirmButton: true,
+        confirmButtonText: 'Cerrar',
+        confirmButtonColor: '#0f172a'
+      });
+    } else {
+      alert(`Restauración #${r.id}\nNombre: ${nombreRest}\nCopia: ${copiaUsada}\nBase: ${baseRest}\nTablas: ${tablasRecup}\nEstudiantes: ${cantEstudiantes}\nMatrículas: ${cantMatriculas}\nEstado: ${r.status}\nDuración: ${r.duration_str}`);
+    }
+  } catch (err) {
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({ icon: 'error', title: 'Error al consultar detalle', text: err.message, confirmButtonColor: '#e11d48' });
+    } else {
+      alert('Error: ' + err.message);
+    }
   }
 }
 
@@ -3006,25 +3097,25 @@ async function abrirRecuperarDatosAdmin(restoreId, targetDb, description = '') {
     const recup = data.matriculas_recuperables || [];
     const exist = data.matriculas_existentes || [];
     const total = data.total_matriculas_en_prueba || 0;
-    const nombreRest = formatNombreRestauracionVisible(targetDb, description);
+    const todas = [...recup, ...exist];
 
-    let tablaHtml = '';
+    let tablaRecupHtml = '';
     if (recup.length === 0) {
-      tablaHtml = `
-        <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-lg text-center my-3">
-          <i class="fa fa-circle-check text-emerald-600 text-2xl mb-1.5 block"></i>
+      tablaRecupHtml = `
+        <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3.5 rounded-lg text-center my-2">
+          <i class="fa fa-circle-check text-emerald-600 text-xl mb-1 block"></i>
           <p class="font-bold text-xs">No hay matrículas pendientes por recuperar.</p>
-          <p class="text-[11px] text-slate-600 mt-1">Todas las ${total} matrículas encontradas en esta copia de seguridad ya se encuentran presentes en la base principal <strong>portal_academico</strong>.</p>
+          <p class="text-[11px] text-slate-600 mt-0.5">Todas las ${total} matrículas encontradas en esta copia ya se encuentran presentes en la base principal <strong>portal_academico</strong>.</p>
         </div>
       `;
     } else {
-      tablaHtml = `
-        <div class="mb-2.5">
+      tablaRecupHtml = `
+        <div class="mb-2">
           <p class="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 text-left leading-relaxed">
-            <i class="fa fa-triangle-exclamation text-amber-600 mr-1"></i> Se detectaron <strong>${recup.length}</strong> matrícula(s) en la copia de seguridad que fueron eliminadas o no existen en la base principal. Puede recuperarlas individualmente a <strong>portal_academico</strong>.
+            <i class="fa fa-triangle-exclamation text-amber-600 mr-1"></i> Se detectaron <strong>${recup.length}</strong> matrícula(s) en la copia que fueron eliminadas o no existen en la base principal. Puede recuperarlas selectivamente hacia <strong>portal_academico</strong>:
           </p>
         </div>
-        <div class="max-h-72 overflow-y-auto border border-slate-200 rounded shadow-2xs">
+        <div class="max-h-60 overflow-y-auto border border-slate-200 rounded shadow-2xs mb-3">
           <table class="w-full text-left text-xs border-collapse">
             <thead class="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200 sticky top-0">
               <tr>
@@ -3065,19 +3156,59 @@ async function abrirRecuperarDatosAdmin(restoreId, targetDb, description = '') {
       `;
     }
 
+    // Tabla de comprobación de todas las matrículas en la copia restaurada
+    const tablaTodasHtml = `
+      <details class="mt-2 text-left border border-slate-200 rounded p-2.5 bg-slate-50">
+        <summary class="cursor-pointer text-xs font-bold text-slate-700 hover:text-purple-700 select-none flex items-center justify-between">
+          <span><i class="fa fa-list-check text-purple-600 mr-1.5"></i> Comprobar todas las matrículas en la base restaurada (${total})</span>
+          <span class="text-[10px] text-slate-500 font-normal">Haga clic para expandir / contraer</span>
+        </summary>
+        <div class="max-h-56 overflow-y-auto border border-slate-200 rounded mt-2 bg-white">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-100 text-slate-600 font-semibold uppercase text-[10px] border-b border-slate-200 sticky top-0">
+              <tr>
+                <th class="py-2 px-3">Estudiante</th>
+                <th class="py-2 px-3">Periodo</th>
+                <th class="py-2 px-3">Curso</th>
+                <th class="py-2 px-3 text-center">Estado en Base Restaurada</th>
+                <th class="py-2 px-3 text-center">Presencia en portal_academico</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              ${todas.map(m => `
+                <tr class="hover:bg-slate-50">
+                  <td class="py-2 px-3 font-semibold text-slate-800">${esc(m.estudiante_apellidos)}, ${esc(m.estudiante_nombres)} <span class="text-[10px] text-slate-400 font-mono">(${esc(m.estudiante_codigo)})</span></td>
+                  <td class="py-2 px-3 font-mono text-[11px]">${esc(m.periodo)}</td>
+                  <td class="py-2 px-3 text-slate-700">${esc(m.curso_nombre)}</td>
+                  <td class="py-2 px-3 text-center"><span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700">${esc(m.estado)}</span></td>
+                  <td class="py-2 px-3 text-center">
+                    ${m.existe_en_principal 
+                      ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800"><i class="fa fa-check mr-1"></i>Presente en principal</span>'
+                      : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800"><i class="fa fa-triangle-exclamation mr-1"></i>Ausente (Eliminada)</span>'
+                    }
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    `;
+
     if (typeof Swal !== 'undefined') {
       Swal.fire({
         title: `<span class="text-base font-bold text-slate-900 flex items-center justify-center gap-2"><i class="fa fa-file-import text-purple-600"></i> Recuperar Datos</span>`,
         html: `
           <div class="text-left text-xs text-slate-700 mt-1">
             <div class="bg-slate-50 border border-slate-200 rounded p-2.5 mb-2 flex items-center justify-between text-xs">
-              <div><strong class="text-slate-600">Base Restaurada:</strong> <span class="font-bold text-purple-800 ml-1">${esc(nombreRest)}</span></div>
-              <div class="text-[11px] text-slate-500 font-mono">Total en copia: <strong>${total}</strong></div>
+              <div><strong class="text-slate-600">Base Restaurada:</strong> <span class="font-mono font-bold text-purple-800 ml-1">${esc(targetDb)}</span></div>
+              <div class="text-[11px] text-slate-500 font-mono">Total en copia: <strong>${total}</strong> | Ausentes: <strong class="text-amber-700">${recup.length}</strong></div>
             </div>
-            ${tablaHtml}
+            ${tablaRecupHtml}
+            ${tablaTodasHtml}
           </div>
         `,
-        width: '760px',
+        width: '780px',
         showCloseButton: true,
         showConfirmButton: true,
         confirmButtonText: 'Cerrar',

@@ -439,22 +439,28 @@ def restaurar_backup_prueba(
     backup_id: int,
     target_db: str,
     user_id: int | None = None,
-    description: str | None = None
+    description: str | None = None,
+    overwrite_existing: bool = False
 ) -> dict:
     """
     Restaura una copia de seguridad como BASE DE DATOS DE PRUEBA.
-    Evita SQL Injection, prohíbe restaurar sobre la base de producción,
-    crea la base de prueba, ejecuta pg_restore y registra la bitácora.
+    Evita SQL Injection, prohíbe terminantemente restaurar o eliminar la base de producción portal_academico,
+    ofrece resolución de nombres si la base ya existe, ejecuta pg_restore y registra la bitácora con conteo de registros.
     """
-    # 1. Validación de seguridad en el nombre de la base de datos
-    if not re.match(r"^[a-zA-Z0-9_]+$", target_db):
-        raise HTTPException(400, "Nombre de base de datos inválido. Solo se permiten letras, números y guión bajo.")
+    # 1. Normalización y validación de seguridad en el nombre de la base de datos
+    target_db = target_db.strip().lower()
+    if not re.match(r"^[a-z0-9_]+$", target_db):
+        raise HTTPException(400, "Nombre de base de datos inválido. Solo se permiten letras minúsculas, números y guión bajo.")
 
     url = make_url(DATABASE_URL)
     prod_db_name = (url.database or "portal_academico").lower()
+    forbidden_dbs = {prod_db_name, "portal_academico", "postgres", "template0", "template1"}
 
-    if target_db.lower() in [prod_db_name, "postgres", "template1", "portal_academico"]:
-        raise HTTPException(400, "Por seguridad, está terminantemente prohibido restaurar directamente sobre la base de producción o del sistema.")
+    if target_db in forbidden_dbs:
+        raise HTTPException(
+            400,
+            "Por seguridad, está terminantemente prohibido restaurar directamente o sobrescribir la base principal 'portal_academico' o bases del sistema."
+        )
 
     backup = db.get(BackupFile, backup_id)
     if not backup:
@@ -475,6 +481,33 @@ def restaurar_backup_prueba(
     if not pg_restore_path:
         raise HTTPException(500, "No se encontró pg_restore en el servidor. Configure PG_RESTORE_PATH en backend/.env")
 
+    # 2. Comprobar si la base de destino ya existe en PostgreSQL
+    db_exists = db.execute(text("SELECT 1 FROM pg_database WHERE datname = :target"), {"target": target_db}).scalar()
+    if db_exists:
+        if not overwrite_existing:
+            # Generar sugerencia automática de nombre (ej: target_db_2, target_db_3)
+            base_prefix = re.sub(r'_\d+$', '', target_db)
+            num = 2
+            suggested = f"{base_prefix}_{num}"
+            while db.execute(text("SELECT 1 FROM pg_database WHERE datname = :target"), {"target": suggested}).scalar():
+                num += 1
+                suggested = f"{base_prefix}_{num}"
+
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "DATABASE_EXISTS",
+                    "message": f"La base de datos de prueba '{target_db}' ya existe en el servidor PostgreSQL.",
+                    "target_database": target_db,
+                    "suggested_database": suggested
+                }
+            )
+        else:
+            # Eliminar de forma segura ÚNICAMENTE la base de prueba previa
+            if target_db in forbidden_dbs:
+                raise HTTPException(400, "Prohibido eliminar o sobrescribir la base de producción 'portal_academico'.")
+            limpiar_db(target_db)
+
     # Iniciar registro en restore_history
     now_utc = datetime.utcnow()
     restore_entry = RestoreHistory(
@@ -488,15 +521,6 @@ def restaurar_backup_prueba(
     db.add(restore_entry)
     db.commit()
     db.refresh(restore_entry)
-
-    # 2. Comprobar si la base de destino ya existe
-    db_exists = db.execute(text("SELECT 1 FROM pg_database WHERE datname = :target"), {"target": target_db}).scalar()
-    if db_exists:
-        restore_entry.status = "ERROR"
-        restore_entry.finished_at = datetime.utcnow()
-        restore_entry.message = f"La base de datos destino '{target_db}' ya existe. Elija otro nombre para la prueba."
-        db.commit()
-        raise HTTPException(400, restore_entry.message)
 
     # 3. Crear la base de datos destino con conexión AUTOCOMMIT
     maint_url = url.set(database="postgres")
@@ -539,7 +563,6 @@ def restaurar_backup_prueba(
             timeout=300
         )
     except subprocess.TimeoutExpired:
-        # Limpieza de base incompleta
         limpiar_db(target_db)
         restore_entry.status = "ERROR"
         restore_entry.finished_at = datetime.utcnow()
@@ -556,7 +579,7 @@ def restaurar_backup_prueba(
 
     stderr_clean = sanitize_error(proc.stderr, url.password)
 
-    # pg_restore retorna 0 en éxito rotundo, y 1 en advertencias menores (warnings)
+    # pg_restore retorna 0 en éxito, y 1 en advertencias menores (warnings de permisos/roles)
     if proc.returncode > 1:
         limpiar_db(target_db)
         restore_entry.status = "ERROR"
@@ -565,28 +588,62 @@ def restaurar_backup_prueba(
         db.commit()
         raise HTTPException(500, f"Error al restaurar: {restore_entry.message}")
 
-    # Verificar que la base restaurada contenga tablas
+    # 5. Verificar que existan tablas y contar registros reales
     restored_url = url.set(database=target_db)
     rest_engine = create_engine(restored_url)
     table_count = 0
+    estudiantes_count = 0
+    matriculas_count = 0
+    total_registros = 0
     try:
         with rest_engine.connect() as rconn:
-            table_count = rconn.execute(text("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'")).scalar() or 0
+            table_count = rconn.execute(text(
+                "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+            )).scalar() or 0
+
+            has_est = rconn.execute(text(
+                "SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'estudiantes'"
+            )).scalar()
+            if has_est:
+                estudiantes_count = rconn.execute(text("SELECT count(*) FROM estudiantes")).scalar() or 0
+
+            has_mat = rconn.execute(text(
+                "SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'matriculas'"
+            )).scalar()
+            if has_mat:
+                matriculas_count = rconn.execute(text("SELECT count(*) FROM matriculas")).scalar() or 0
+
+            all_tables = rconn.execute(text(
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+            )).scalars().all()
+            for tname in all_tables:
+                try:
+                    c = rconn.execute(text(f'SELECT count(*) FROM "{tname}"')).scalar() or 0
+                    total_registros += c
+                except Exception:
+                    pass
     except Exception as e:
-        stderr_clean += f" (Advertencia al contar tablas: {e})"
+        stderr_clean += f" (Advertencia al verificar registros: {e})"
     finally:
         rest_engine.dispose()
 
     restore_entry.finished_at = datetime.utcnow()
     restore_entry.status = "CORRECTO"
-    restore_entry.message = f"Restauración completada con éxito como base de prueba '{target_db}'. Tablas restauradas: {table_count}."
+    restore_entry.message = (
+        f"Restauración verificada con éxito como base de prueba '{target_db}'. "
+        f"Tablas: {table_count}, Estudiantes: {estudiantes_count}, Matrículas: {matriculas_count}, Total registros: {total_registros}."
+    )
     db.commit()
 
     return {
         "ok": True,
+        "restore_id": restore_entry.id,
         "message": restore_entry.message,
         "target_database": target_db,
         "table_count": table_count,
+        "estudiantes_count": estudiantes_count,
+        "matriculas_count": matriculas_count,
+        "total_registros": total_registros,
         "backup_filename": backup.filename
     }
 

@@ -108,6 +108,7 @@ class RestoreCreateIn(BaseModel):
         description="Nombre de la base de datos de prueba destino (solo letras, números y guión bajo)"
     )
     description: str = Field(..., min_length=1, max_length=255, description="Nombre de la restauración")
+    overwrite_existing: bool = False
 
 class RestoreHistoryOut(BaseModel):
     id: int
@@ -122,6 +123,9 @@ class RestoreHistoryOut(BaseModel):
     status: str
     message: str | None = None
     user_name: str | None = None
+    table_count: int | None = None
+    estudiantes_count: int | None = None
+    matriculas_count: int | None = None
 
     class Config:
         from_attributes = True
