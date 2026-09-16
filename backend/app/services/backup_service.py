@@ -602,3 +602,292 @@ def limpiar_db(target_db: str):
         maint_engine.dispose()
     except Exception:
         pass
+
+# ==================== RECUPERACIÓN DE DATOS SELECTIVA ====================
+
+def preview_recovery_data(db: Session, restore_id: int) -> dict:
+    restore = db.get(RestoreHistory, restore_id)
+    if not restore:
+        raise HTTPException(404, "Registro de restauración no encontrado")
+    if restore.status != "CORRECTO":
+        raise HTTPException(400, "Solo se pueden recuperar datos de una base de prueba con estado CORRECTO")
+
+    url = make_url(DATABASE_URL)
+    # Comprobar si la base destino existe en PostgreSQL
+    db_exists = db.execute(
+        text("SELECT 1 FROM pg_database WHERE datname = :target"),
+        {"target": restore.target_database}
+    ).scalar()
+    if not db_exists:
+        raise HTTPException(400, f"La base de datos de prueba '{restore.target_database}' no existe en PostgreSQL. Ejecute una nueva prueba de restauración.")
+
+    from sqlalchemy import create_engine
+    target_url = url.set(database=restore.target_database)
+    test_engine = create_engine(target_url)
+
+    matriculas_recuperables = []
+    matriculas_existentes = []
+    test_rows = []
+
+    try:
+        with test_engine.connect() as tconn:
+            # Comprobar si existe la tabla matriculas en la base de prueba
+            has_table = tconn.execute(
+                text("SELECT 1 FROM information_schema.tables WHERE table_name = 'matriculas' AND table_schema = 'public'")
+            ).scalar()
+            if not has_table:
+                return {
+                    "restore_id": restore.id,
+                    "target_database": restore.target_database,
+                    "description": restore.description,
+                    "total_matriculas_en_prueba": 0,
+                    "matriculas_recuperables": [],
+                    "matriculas_existentes": [],
+                    "message": "La base restaurada no contiene la tabla de matrículas."
+                }
+
+            query_test = text("""
+                SELECT 
+                    m.id AS id_en_prueba,
+                    m.estudiante_id,
+                    COALESCE(e.codigo, 'SIN-COD') AS est_codigo,
+                    COALESCE(e.nombres, 'Sin Nombre') AS est_nombres,
+                    COALESCE(e.apellidos, 'Sin Apellidos') AS est_apellidos,
+                    e.dni AS est_dni,
+                    e.correo AS est_correo,
+                    e.carrera AS est_carrera,
+                    e.ciclo AS est_ciclo,
+                    m.curso_id,
+                    COALESCE(c.codigo, 'CUR-00') AS cur_codigo,
+                    COALESCE(c.nombre, 'Asignatura') AS cur_nombre,
+                    m.periodo,
+                    m.estado,
+                    m.nota
+                FROM matriculas m
+                LEFT JOIN estudiantes e ON e.id = m.estudiante_id
+                LEFT JOIN cursos c ON c.id = m.curso_id
+                ORDER BY m.id ASC
+            """)
+            test_rows = tconn.execute(query_test).mappings().all()
+
+        from .. import models
+        for r in test_rows:
+            item = {
+                "id_en_prueba": r["id_en_prueba"],
+                "estudiante_id": r["estudiante_id"],
+                "estudiante_codigo": r["est_codigo"],
+                "estudiante_nombres": r["est_nombres"],
+                "estudiante_apellidos": r["est_apellidos"],
+                "curso_id": r["curso_id"],
+                "curso_codigo": r["cur_codigo"],
+                "curso_nombre": r["cur_nombre"],
+                "periodo": r["periodo"],
+                "estado": r["estado"] or "MATRICULADO",
+                "nota": float(r["nota"]) if r["nota"] is not None else None
+            }
+
+            # Validar si existe en la base principal (comparando por estudiante, curso y periodo)
+            main_match = db.query(models.Matricula).join(models.Estudiante).join(models.Curso).filter(
+                models.Estudiante.codigo == r["est_codigo"],
+                models.Curso.codigo == r["cur_codigo"],
+                models.Matricula.periodo == r["periodo"]
+            ).first()
+
+            if main_match:
+                item["existe_en_principal"] = True
+                matriculas_existentes.append(item)
+            else:
+                item["existe_en_principal"] = False
+                matriculas_recuperables.append(item)
+
+    except Exception as e:
+        raise HTTPException(500, f"Error al inspeccionar la base de prueba: {e}")
+    finally:
+        test_engine.dispose()
+
+    return {
+        "restore_id": restore.id,
+        "target_database": restore.target_database,
+        "description": restore.description,
+        "total_matriculas_en_prueba": len(test_rows),
+        "matriculas_recuperables": matriculas_recuperables,
+        "matriculas_existentes": matriculas_existentes,
+        "message": f"Se encontraron {len(matriculas_recuperables)} matrículas ausentes/eliminadas listas para recuperar."
+    }
+
+def recover_matricula_data(db: Session, restore_id: int, matricula_id: int, user_id: int | None = None) -> dict:
+    from datetime import date
+    from .. import models
+    from ..auth import pwd_context
+
+    restore = db.get(RestoreHistory, restore_id)
+    if not restore:
+        raise HTTPException(404, "Registro de restauración no encontrado")
+    if restore.status != "CORRECTO":
+        raise HTTPException(400, "Solo se pueden recuperar datos de una base de prueba con estado CORRECTO")
+
+    url = make_url(DATABASE_URL)
+    db_exists = db.execute(
+        text("SELECT 1 FROM pg_database WHERE datname = :target"),
+        {"target": restore.target_database}
+    ).scalar()
+    if not db_exists:
+        raise HTTPException(400, f"La base de prueba '{restore.target_database}' no existe en PostgreSQL.")
+
+    from sqlalchemy import create_engine
+    target_url = url.set(database=restore.target_database)
+    test_engine = create_engine(target_url)
+
+    try:
+        with test_engine.connect() as tconn:
+            query = text("""
+                SELECT 
+                    m.id AS id_en_prueba,
+                    m.estudiante_id,
+                    e.codigo AS est_codigo,
+                    e.nombres AS est_nombres,
+                    e.apellidos AS est_apellidos,
+                    e.dni AS est_dni,
+                    e.correo AS est_correo,
+                    e.carrera AS est_carrera,
+                    e.ciclo AS est_ciclo,
+                    e.fecha_ingreso AS est_fecha_ingreso,
+                    e.telefono AS est_telefono,
+                    e.direccion AS est_direccion,
+                    m.curso_id,
+                    c.codigo AS cur_codigo,
+                    c.nombre AS cur_nombre,
+                    c.creditos AS cur_creditos,
+                    c.docente AS cur_docente,
+                    c.ciclo AS cur_ciclo,
+                    m.periodo,
+                    m.estado,
+                    m.nota
+                FROM matriculas m
+                JOIN estudiantes e ON e.id = m.estudiante_id
+                JOIN cursos c ON c.id = m.curso_id
+                WHERE m.id = :mid
+            """)
+            r = tconn.execute(query, {"mid": matricula_id}).mappings().first()
+            if not r:
+                raise HTTPException(404, "La matrícula seleccionada no existe en la base de datos de prueba")
+
+            # Consultar posibles notas asociadas
+            notas_query = text("""
+                SELECT n.valor, n.observaciones, ev.orden, ev.nombre AS eval_nombre
+                FROM notas n
+                JOIN evaluaciones ev ON ev.id = n.evaluacion_id
+                WHERE n.matricula_id = :mid
+            """)
+            test_notas = tconn.execute(notas_query, {"mid": matricula_id}).mappings().all()
+
+        # 1. Verificar si ya existe en la base principal (NO duplicar registros existentes)
+        existente = db.query(models.Matricula).join(models.Estudiante).join(models.Curso).filter(
+            models.Estudiante.codigo == r["est_codigo"],
+            models.Curso.codigo == r["cur_codigo"],
+            models.Matricula.periodo == r["periodo"]
+        ).first()
+        if existente:
+            raise HTTPException(400, f"La matrícula del estudiante {r['est_apellidos']} en {r['cur_nombre']} ({r['periodo']}) ya existe en la base principal portal_academico.")
+
+        # 2. Asegurar que el estudiante existe en la base principal
+        est = db.query(models.Estudiante).filter(models.Estudiante.codigo == r["est_codigo"]).first()
+        if not est:
+            usr = db.query(models.Usuario).filter(models.Usuario.correo == r["est_correo"]).first()
+            if not usr:
+                usr = models.Usuario(
+                    nombre=f"{r['est_nombres']} {r['est_apellidos']}",
+                    correo=r["est_correo"],
+                    password_hash=pwd_context.hash("Estudiante123*"),
+                    rol="ESTUDIANTE",
+                    activo=True
+                )
+                db.add(usr)
+                db.flush()
+            est = models.Estudiante(
+                codigo=r["est_codigo"],
+                nombres=r["est_nombres"],
+                apellidos=r["est_apellidos"],
+                dni=r["est_dni"],
+                correo=r["est_correo"],
+                carrera=r["est_carrera"],
+                ciclo=r["est_ciclo"],
+                fecha_ingreso=r["est_fecha_ingreso"] or date.today(),
+                telefono=r["est_telefono"],
+                direccion=r["est_direccion"],
+                estado="ACTIVO",
+                usuario_id=usr.id
+            )
+            db.add(est)
+            db.flush()
+
+        # 3. Asegurar que el curso existe en la base principal
+        cur = db.query(models.Curso).filter(models.Curso.codigo == r["cur_codigo"]).first()
+        if not cur:
+            cur = models.Curso(
+                codigo=r["cur_codigo"],
+                nombre=r["cur_nombre"],
+                creditos=r["cur_creditos"] or 4,
+                docente=r["cur_docente"] or "Docente",
+                ciclo=r["cur_ciclo"] or 1
+            )
+            db.add(cur)
+            db.flush()
+
+        # 4. Resolver periodo y seccion en la base principal
+        periodo_obj = db.query(models.Periodo).filter(models.Periodo.codigo == r["periodo"]).first()
+        periodo_id = periodo_obj.id if periodo_obj else None
+        seccion_id = None
+        if periodo_id:
+            seccion = db.query(models.Seccion).filter(
+                models.Seccion.curso_id == cur.id,
+                models.Seccion.periodo_id == periodo_id
+            ).first()
+            if seccion:
+                seccion_id = seccion.id
+
+        # 5. Insertar la matrícula recuperada en la base principal
+        nueva_matricula = models.Matricula(
+            estudiante_id=est.id,
+            curso_id=cur.id,
+            periodo=r["periodo"],
+            estado=r["estado"] or "MATRICULADO",
+            nota=r["nota"],
+            seccion_id=seccion_id,
+            periodo_id=periodo_id
+        )
+        db.add(nueva_matricula)
+        db.flush()
+
+        # 6. Reinsertar notas si existen evaluaciones configuradas en la sección
+        if seccion_id and test_notas:
+            evaluaciones = db.query(models.Evaluacion).filter(models.Evaluacion.seccion_id == seccion_id).all()
+            eval_by_order = {ev.orden: ev.id for ev in evaluaciones}
+            for tn in test_notas:
+                ev_id = eval_by_order.get(tn["orden"])
+                if ev_id:
+                    db.add(models.Nota(
+                        matricula_id=nueva_matricula.id,
+                        evaluacion_id=ev_id,
+                        valor=tn["valor"],
+                        observaciones=tn["observaciones"]
+                    ))
+
+        db.commit()
+        db.refresh(nueva_matricula)
+
+        return {
+            "ok": True,
+            "message": f"Matrícula de {est.apellidos}, {est.nombres} en {cur.nombre} recuperada exitosamente en la base principal.",
+            "matricula_id": nueva_matricula.id,
+            "estudiante": f"{est.apellidos}, {est.nombres}",
+            "codigo_estudiante": est.codigo,
+            "curso": cur.nombre,
+            "codigo_curso": cur.codigo,
+            "periodo": nueva_matricula.periodo,
+            "estado": nueva_matricula.estado
+        }
+
+    finally:
+        test_engine.dispose()
+

@@ -160,3 +160,32 @@ class BackupFileOnDiskOut(BaseModel):
     db_type: str | None = None     # Tipo de backup según BD (MANUAL / PROGRAMADO / None)
     db_created_by: str | None = None  # Usuario que lo generó según BD
     is_orphan: bool = False       # True si existe en disco pero no tiene registro en BD
+
+# ==================== RECUPERACIÓN DE DATOS SELECTIVA ====================
+
+class RecoveryMatriculaItem(BaseModel):
+    id_en_prueba: int
+    estudiante_id: int
+    estudiante_codigo: str
+    estudiante_nombres: str
+    estudiante_apellidos: str
+    curso_id: int
+    curso_codigo: str
+    curso_nombre: str
+    periodo: str
+    estado: str
+    nota: float | None = None
+    existe_en_principal: bool = False
+
+class RecoveryPreviewOut(BaseModel):
+    restore_id: int
+    target_database: str
+    description: str | None = None
+    total_matriculas_en_prueba: int
+    matriculas_recuperables: list[RecoveryMatriculaItem]
+    matriculas_existentes: list[RecoveryMatriculaItem]
+    message: str | None = None
+
+class RecoverMatriculaIn(BaseModel):
+    matricula_id: int
+

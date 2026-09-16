@@ -22,7 +22,9 @@ from ..schemas_backups import (
     RestoreHistoryOut,
     BackupSummaryOut,
     HealthCheckOut,
-    BackupFileOnDiskOut
+    BackupFileOnDiskOut,
+    RecoveryPreviewOut,
+    RecoverMatriculaIn
 )
 from ..services.backup_service import (
     crear_backup,
@@ -31,7 +33,9 @@ from ..services.backup_service import (
     restaurar_backup_prueba,
     check_backup_health,
     format_size,
-    get_timezone
+    get_timezone,
+    preview_recovery_data,
+    recover_matricula_data
 )
 from ..services.scheduler_service import (
     calcular_proxima_ejecucion,
@@ -341,6 +345,33 @@ def listar_restauraciones(
             user_name=r.usuario.nombre if r.usuario else "Sistema"
         ))
     return resultado
+
+# ==================== 3.1. RECUPERACIÓN SELECTIVA DE DATOS DESDE BASE RESTAURADA ====================
+
+@router.get("/restores/{id}/preview-recovery", response_model=RecoveryPreviewOut)
+def previsualizar_recuperacion_restauracion(
+    id: int,
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(require_admin)
+):
+    """
+    Inspecciona la base de datos de prueba restaurada y compara contra la base principal portal_academico,
+    identificando registros faltantes o eliminados listos para recuperar selectivamente.
+    """
+    return preview_recovery_data(db, restore_id=id)
+
+@router.post("/restores/{id}/recover-matricula")
+def recuperar_matricula_endpoint(
+    id: int,
+    data: RecoverMatriculaIn,
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(require_admin)
+):
+    """
+    Copia selectivamente una matrícula (y sus notas asociadas) desde la base de prueba hacia la base
+    principal portal_academico, sin duplicar registros existentes ni sobrescribir toda la base.
+    """
+    return recover_matricula_data(db, restore_id=id, matricula_id=data.matricula_id, user_id=user.id)
 
 # ==================== 4. LISTADO Y CREACIÓN DE BACKUPS ====================
 
