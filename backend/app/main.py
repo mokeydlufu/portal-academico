@@ -26,17 +26,95 @@ try:
 except Exception as e:
     print(f"[DB-MIGRATION] Aviso al verificar columnas de backup: {e}")
 
-# Crea un usuario administrador inicial si todavía no existe.
-with SessionLocal() as db:
-    if not db.query(models.Usuario).filter(models.Usuario.correo == "admin@portal.edu.pe").first():
-        db.add(models.Usuario(
-            nombre="Administrador",
-            correo="admin@portal.edu.pe",
-            password_hash=pwd_context.hash("Admin123*"),
-            rol="ADMIN",
-            activo=True
-        ))
+# Crea o sincroniza usuarios iniciales (Administrador y Estudiante)
+try:
+    with SessionLocal() as db:
+        # 1. Administrador
+        admin = db.query(models.Usuario).filter(models.Usuario.correo == "admin@portal.edu.pe").first()
+        if not admin:
+            db.add(models.Usuario(
+                nombre="Administrador",
+                correo="admin@portal.edu.pe",
+                password_hash=pwd_context.hash("Admin123*"),
+                rol="ADMIN",
+                activo=True
+            ))
+        else:
+            admin.password_hash = pwd_context.hash("Admin123*")
+            admin.activo = True
+
+        # 2. Estudiante Carlos Quispe
+        carlos = db.query(models.Usuario).filter(models.Usuario.correo == "carlos@portal.edu.pe").first()
+        if not carlos:
+            carlos = models.Usuario(
+                nombre="Carlos Alexander Quispe Espino",
+                correo="carlos@portal.edu.pe",
+                password_hash=pwd_context.hash("Estudiante123*"),
+                rol="ESTUDIANTE",
+                activo=True
+            )
+            db.add(carlos)
+            db.flush()
+        else:
+            carlos.password_hash = pwd_context.hash("Estudiante123*")
+            carlos.rol = "ESTUDIANTE"
+            carlos.activo = True
+            db.flush()
+
+        # 3. Perfil del estudiante Carlos
+        est = db.query(models.Estudiante).filter(
+            (models.Estudiante.usuario_id == carlos.id) | (models.Estudiante.correo == "carlos@portal.edu.pe")
+        ).first()
+        if not est:
+            db.add(models.Estudiante(
+                codigo="2026001",
+                nombres="CARLOS ALEXANDER",
+                apellidos="QUISPE ESPINO",
+                dni="76543210",
+                correo="carlos@portal.edu.pe",
+                carrera="INGENIERÍA DE SISTEMAS DE INFORMACIÓN",
+                ciclo=7,
+                fecha_ingreso=date(2023, 3, 15),
+                estado="ACTIVO",
+                usuario_id=carlos.id
+            ))
+        else:
+            est.usuario_id = carlos.id
+            est.correo = "carlos@portal.edu.pe"
+
         db.commit()
+except Exception as e:
+    print(f"[INIT-AUTH] Aviso al inicializar usuarios demo: {e}")
+
+# Ejecutar migración y seed académico inicial si no existen matrículas
+try:
+    with engine.connect() as conn:
+        has_academic_data = False
+        try:
+            res = conn.execute(text("SELECT COUNT(*) FROM matriculas")).scalar()
+            has_academic_data = (res is not None and res > 0)
+        except Exception:
+            has_academic_data = False
+
+        if not has_academic_data:
+            print("[AUTO-SEED] Matrículas vacías detectadas. Iniciando seed académico...")
+            candidates = [
+                Path(__file__).resolve().parent.parent.parent / "database" / "run_migration_and_seed.py",
+                Path("/app/database/run_migration_and_seed.py"),
+                Path("database/run_migration_and_seed.py")
+            ]
+            seed_script = next((p for p in candidates if p.exists()), None)
+            if seed_script:
+                import importlib.util
+                spec = importlib.util.spec_from_file_location("auto_seed_module", str(seed_script))
+                if spec and spec.loader:
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    if hasattr(mod, "run_migration_and_seed"):
+                        mod.run_migration_and_seed()
+                        print("[AUTO-SEED] Migración y seed completados exitosamente.")
+except Exception as e:
+    print(f"[AUTO-SEED] Aviso durante verificación/seed académico: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

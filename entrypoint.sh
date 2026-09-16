@@ -13,6 +13,10 @@ echo "==> Configurando proxy inverso Nginx..."
 envsubst '${PORT}' < /app/nginx.conf.template > /etc/nginx/conf.d/default.conf
 rm -f /etc/nginx/sites-enabled/default
 
+# 1.5 Ejecutar migración y seed inicial (idempotente)
+echo "==> Ejecutando migraciones y seed de base de datos..."
+python /app/database/run_migration_and_seed.py || echo "[WARN] Seed ejecutado previamente o no crítico."
+
 # 2. Iniciar Backend FastAPI en background (127.0.0.1:8000)
 echo "==> Iniciando Backend FastAPI (Python)..."
 cd /app/backend
