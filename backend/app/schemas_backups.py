@@ -8,6 +8,7 @@ class BackupFileOut(BaseModel):
     id: int
     filename: str
     description: str | None = None
+    schema_name: str | None = None
     size_bytes: int
     size_formatted: str
     backup_type: str

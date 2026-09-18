@@ -288,6 +288,7 @@ class BackupFile(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    schema_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     retention_deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     retention_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 

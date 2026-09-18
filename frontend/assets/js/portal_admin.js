@@ -1234,7 +1234,10 @@ async function renderBackupsPanelView(container) {
         </h1>
         <p class="text-xs text-slate-500">Gestión de respaldos automatizados, políticas de retención y pruebas en PostgreSQL</p>
       </div>
-      <div>
+      <div class="flex items-center gap-2">
+        <a href="https://console.neon.tech/app/projects/purple-band-29155102" target="_blank" rel="noopener noreferrer" class="bg-slate-900 hover:bg-black text-emerald-400 text-xs font-semibold px-3 py-2 rounded shadow-xs flex items-center gap-1.5 transition-colors" title="Abrir consola interactiva de tablas y consultas en Neon">
+          <i class="fa fa-database"></i> Ver Base de Datos en Neon <i class="fa fa-arrow-up-right-from-square text-[10px]"></i>
+        </a>
         <button onclick="abrirModalCrearBackup()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded shadow-xs flex items-center gap-1.5 cursor-pointer">
           <i class="fa fa-plus-circle"></i> Crear Backup Ahora
         </button>
@@ -1317,6 +1320,7 @@ async function renderBackupsPanelView(container) {
             <tr>
               <th class="py-2.5 px-3">Fecha</th>
               <th class="py-2.5 px-3">Nombre de la Copia</th>
+              <th class="py-2.5 px-3">Esquema en BD</th>
               <th class="py-2.5 px-3">Tipo</th>
               <th class="py-2.5 px-3">Tamaño</th>
               <th class="py-2.5 px-3 text-center">Estado</th>
@@ -1333,10 +1337,17 @@ async function renderBackupsPanelView(container) {
 }
 
 function renderFilaBackupAdmin(b) {
+  const schemaBadge = b.schema_name ? `
+    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs" title="Esquema clonado con tablas en PostgreSQL (Render)">
+      <i class="fa fa-database text-[9px] text-emerald-600"></i> ${esc(b.schema_name)}
+    </span>
+  ` : `<span class="text-slate-400 text-[10px] italic">--</span>`;
+
   return `
     <tr class="hover:bg-slate-50 transition-colors">
       <td class="py-2.5 px-3 font-semibold text-slate-800">${esc(b.created_at)}</td>
       <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(formatNombreBackupVisible(b.filename, b.description))}</td>
+      <td class="py-2.5 px-3">${schemaBadge}</td>
       <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">${esc(formatTipoBackupVisible(b.backup_type))}</span></td>
       <td class="py-2.5 px-3 font-medium text-slate-700">${esc(b.size_formatted)}</td>
       <td class="py-2.5 px-3 text-center">
@@ -1383,7 +1394,10 @@ async function renderBackupsGuardadosView(container) {
         </h1>
         <p class="text-xs text-slate-500">Archivos protegidos físicamente en el servidor</p>
       </div>
-      <div>
+      <div class="flex items-center gap-2">
+        <a href="https://console.neon.tech/app/projects/purple-band-29155102" target="_blank" rel="noopener noreferrer" class="bg-slate-900 hover:bg-black text-emerald-400 text-xs font-semibold px-3 py-2 rounded shadow-xs flex items-center gap-1.5 transition-colors" title="Abrir consola interactiva de tablas y consultas en Neon">
+          <i class="fa fa-database"></i> Ver Base de Datos en Neon <i class="fa fa-arrow-up-right-from-square text-[10px]"></i>
+        </a>
         <button onclick="abrirModalCrearBackup()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded shadow-xs flex items-center gap-1.5 cursor-pointer">
           <i class="fa fa-plus-circle"></i> Crear Backup Ahora
         </button>
@@ -1397,9 +1411,9 @@ async function renderBackupsGuardadosView(container) {
             <tr>
               <th class="py-2.5 px-3">Fecha Creación</th>
               <th class="py-2.5 px-3">Nombre de la Copia</th>
+              <th class="py-2.5 px-3">Esquema en BD</th>
               <th class="py-2.5 px-3">Tipo</th>
               <th class="py-2.5 px-3">Tamaño</th>
-              <th class="py-2.5 px-3">Generado Por</th>
               <th class="py-2.5 px-3 text-center">Estado</th>
               <th class="py-2.5 px-3 text-right">Acciones</th>
             </tr>
@@ -2116,12 +2130,34 @@ async function verDetalleBackupAdmin(id) {
                   <td class="py-2 px-3 font-semibold text-slate-600">Mensaje</td>
                   <td class="py-2 px-3 text-slate-700">${esc(b.mensaje || 'Generado correctamente.')}</td>
                 </tr>
+                <tr class="border-b border-slate-200 bg-emerald-50/60">
+                  <td class="py-2.5 px-3 font-semibold text-emerald-900">Esquema en PostgreSQL (Render)</td>
+                  <td class="py-2.5 px-3 font-mono font-bold text-emerald-800">
+                    <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      <i class="fa fa-database text-emerald-600"></i> ${esc(b.schema_name || 'backup_snapshot')}
+                    </span>
+                  </td>
+                </tr>
                 <tr>
                   <td class="py-2.5 px-3 font-semibold text-slate-600">Ruta / Ubicación Segura</td>
                   <td class="py-2.5 px-3 font-mono text-[11px] text-slate-500 break-all">${esc(b.path)}</td>
                 </tr>
               </tbody>
             </table>
+
+            ${b.schema_name ? `
+              <div class="mt-3 bg-slate-900 text-slate-100 rounded-lg p-3 border border-slate-700 shadow-sm">
+                <div class="flex items-center justify-between text-xs font-semibold text-emerald-400 mb-1.5">
+                  <span class="flex items-center gap-1.5"><i class="fa fa-terminal"></i> Consulta SQL para tu docente (Render / PostgreSQL):</span>
+                  <span class="text-[10px] text-slate-400 font-normal">Esquema con datos reales</span>
+                </div>
+                <p class="text-[11px] text-slate-300 mb-2">Tu docente puede abrir la consola de Render o DBeaver y consultar directamente este respaldo con:</p>
+                <div class="bg-black/50 border border-slate-700 rounded p-2 font-mono text-[11.5px] text-emerald-300 select-all space-y-1">
+                  <div>SELECT * FROM "${esc(b.schema_name)}".matriculas;</div>
+                  <div class="text-slate-500 text-[10.5px]">-- O ver estudiantes: SELECT * FROM "${esc(b.schema_name)}".estudiantes;</div>
+                </div>
+              </div>
+            ` : ''}
           </div>
         `,
         showCloseButton: true,

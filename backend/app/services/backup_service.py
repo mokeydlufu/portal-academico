@@ -139,6 +139,65 @@ def check_backup_health(db: Session) -> dict:
         "message": message
     }
 
+# ==================== CLONACIÓN DE ESQUEMAS DE RESPALDO EN POSTGRESQL ====================
+
+def clonar_esquema_backup(db: Session, schema_name: str) -> dict:
+    """
+    Clona todas las tablas académicas y del dominio desde el esquema 'public'
+    hacia un esquema de respaldo aislado dentro de PostgreSQL (ej: 'backup_20260917_195500').
+    Esto permite que el docente, administrador o evaluador pueda ver y consultar
+    directamente los datos respaldados en la base de datos de Render vía PSQL / pgAdmin / DBeaver.
+    """
+    tablas_excluidas = {"backup_files", "backup_history", "backup_schedules", "restore_history"}
+    tablas_clonadas = 0
+
+    try:
+        # 1. Crear el esquema aislado
+        db.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"'))
+        db.commit()
+
+        # 2. Listar tablas reales en public
+        res = db.execute(text("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+              AND table_type = 'BASE TABLE'
+        """)).fetchall()
+        tablas = [r[0] for r in res if r[0] not in tablas_excluidas]
+
+        # 3. Clonar cada tabla usando AS TABLE (copia exacta de estructura y datos)
+        for tbl in tablas:
+            try:
+                db.execute(text(f'DROP TABLE IF EXISTS "{schema_name}"."{tbl}" CASCADE'))
+                db.execute(text(f'CREATE TABLE "{schema_name}"."{tbl}" AS TABLE public."{tbl}"'))
+                db.commit()
+                tablas_clonadas += 1
+            except Exception as ex_tbl:
+                db.rollback()
+                print(f"[BACKUP-SCHEMA] Advertencia al clonar tabla {tbl} en {schema_name}: {ex_tbl}")
+
+    except Exception as ex:
+        db.rollback()
+        print(f"[BACKUP-SCHEMA] Error general al clonar esquema {schema_name}: {ex}")
+
+    return {
+        "schema_name": schema_name,
+        "tablas_clonadas": tablas_clonadas
+    }
+
+def eliminar_esquema_backup(db: Session, schema_name: str | None):
+    """
+    Elimina un esquema de respaldo en PostgreSQL si existe.
+    """
+    if not schema_name or not schema_name.startswith("backup_"):
+        return
+    try:
+        db.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
+        db.commit()
+    except Exception as ex:
+        db.rollback()
+        print(f"[BACKUP-SCHEMA] Advertencia al eliminar esquema {schema_name}: {ex}")
+
 # Identificador constante para PostgreSQL Advisory Lock al ejecutar un backup
 BACKUP_EXECUTION_LOCK_ID = 88812346
 
@@ -196,6 +255,7 @@ def _ejecutar_crear_backup_proceso(
     now_utc = datetime.utcnow()
 
     filename = f"portal_academico_{now_local.strftime('%Y%m%d_%H%M%S')}.backup"
+    schema_name = f"backup_{now_local.strftime('%Y%m%d_%H%M%S')}"
     output_path = backup_dir / filename
 
     # Registrar en historial con estado EN_PROCESO
@@ -293,10 +353,14 @@ def _ejecutar_crear_backup_proceso(
             db.commit()
             raise HTTPException(500, history_entry.message)
 
+    # Clonar esquema de respaldo directamente en PostgreSQL (Render / Local)
+    clon_res = clonar_esquema_backup(db, schema_name)
+
     # Registrar el archivo en backup_files
     backup_file = BackupFile(
         filename=filename,
         description=description.strip() if (description and description.strip()) else None,
+        schema_name=schema_name,
         path=str(output_path),
         size_bytes=file_size,
         backup_type=trigger,
@@ -312,7 +376,7 @@ def _ejecutar_crear_backup_proceso(
     history_entry.backup_file_id = backup_file.id
     history_entry.finished_at = datetime.utcnow()
     history_entry.status = "CORRECTO"
-    history_entry.message = f"Copia de seguridad creada con éxito. Tamaño: {format_size(file_size)}."
+    history_entry.message = f"Copia de seguridad creada con éxito. Tamaño: {format_size(file_size)}. Esquema en PostgreSQL: {schema_name} ({clon_res.get('tablas_clonadas', 0)} tablas clonadas)."
     db.commit()
 
     # Si fue generado por programación, verificar política de retención
@@ -353,6 +417,8 @@ def aplicar_retencion(db: Session, schedule: BackupSchedule):
                     fpath.unlink()
             except Exception:
                 pass
+            if bf.schema_name:
+                eliminar_esquema_backup(db, bf.schema_name)
             bf.status = "ELIMINADO_RETENCION"
             bf.retention_deleted_at = datetime.utcnow()
             bf.retention_reason = f"Eliminado automáticamente por política de retención de {schedule.retention_days} días."
@@ -428,6 +494,10 @@ def eliminar_backup(db: Session, backup_id: int, user_id: int | None = None) -> 
 
     if file_path.exists():
         file_path.unlink()
+
+    # Eliminar esquema clonado en PostgreSQL si existe
+    if backup.schema_name:
+        eliminar_esquema_backup(db, backup.schema_name)
 
     # Eliminar registro en base de datos (cascade mantiene historial con backup_file_id=NULL)
     db.delete(backup)

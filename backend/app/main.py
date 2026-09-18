@@ -21,6 +21,7 @@ Base.metadata.create_all(bind=engine)
 try:
     with engine.connect() as conn:
         conn.execute(text("ALTER TABLE backup_files ADD COLUMN IF NOT EXISTS description VARCHAR(255);"))
+        conn.execute(text("ALTER TABLE backup_files ADD COLUMN IF NOT EXISTS schema_name VARCHAR(120);"))
         conn.execute(text("ALTER TABLE restore_history ADD COLUMN IF NOT EXISTS description VARCHAR(255);"))
         conn.commit()
 except Exception as e:

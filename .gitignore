@@ -36,3 +36,5 @@ backend/.env
 .DS_Store
 Thumbs.db
 
+.neon
+.env.local
