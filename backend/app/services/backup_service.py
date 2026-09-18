@@ -274,12 +274,17 @@ def _ejecutar_crear_backup_proceso(
     env = os.environ.copy()
     if url.password:
         env["PGPASSWORD"] = url.password
+    if "sslmode" in url.query:
+        env["PGSSLMODE"] = url.query["sslmode"]
+    elif url.host and url.host not in ("localhost", "127.0.0.1"):
+        env["PGSSLMODE"] = "require"
 
     cmd = [
         pg_dump_path,
         "-h", url.host or "localhost",
         "-p", str(url.port or 5432),
         "-U", url.username or "postgres",
+        "-w",
         "-F", "c",
         "-b",
         "-v",
@@ -613,12 +618,17 @@ def restaurar_backup_prueba(
     env = os.environ.copy()
     if url.password:
         env["PGPASSWORD"] = url.password
+    if "sslmode" in url.query:
+        env["PGSSLMODE"] = url.query["sslmode"]
+    elif url.host and url.host not in ("localhost", "127.0.0.1"):
+        env["PGSSLMODE"] = "require"
 
     cmd = [
         pg_restore_path,
         "-h", url.host or "localhost",
         "-p", str(url.port or 5432),
         "-U", url.username or "postgres",
+        "-w",
         "-d", target_db,
         "-v",
         str(file_path)
