@@ -15,7 +15,10 @@ from .services.pdf_service import generar_boleta_simple_pdf, generar_boleta_deta
 from .services.scheduler_service import scheduler_worker_loop
 from .routers import backups
 
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"[DB-INIT] Aviso al ejecutar Base.metadata.create_all: {e}")
 
 # Garantizar columnas de descripción para copias de seguridad y restauraciones
 try:

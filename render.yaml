@@ -9,7 +9,9 @@ services:
     region: oregon
     envVars:
       - key: DATABASE_URL
-        value: postgresql://neondb_owner:npg_3SNkWF6fiDJw@ep-orange-snow-b599ngwh-pooler.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require
+        fromDatabase:
+          name: portal-academico-db
+          property: connectionString
       - key: SECRET_KEY
         generateValue: true
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
